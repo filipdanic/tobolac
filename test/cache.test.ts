@@ -28,6 +28,65 @@ describe("cache core behavior", () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
+  it("uses namespace factoryGetter when getOrSet factory is omitted", async () => {
+    const driver = new InMemoryDriver();
+    const factoryGetter = vi.fn(async (id: string) => ({ id }));
+    const cache = createCache({
+      driver,
+      namespaces: {
+        user: namespace<{ id: string }, [id: string]>({
+          ttl: "1m",
+          factoryGetter,
+        }),
+      },
+    });
+
+    const first = await cache.user.getOrSet("u1");
+    const second = await cache.user.getOrSet("u1");
+
+    expect(first).toEqual({ id: "u1" });
+    expect(second).toEqual({ id: "u1" });
+    expect(factoryGetter).toHaveBeenCalledTimes(1);
+    expect(factoryGetter).toHaveBeenCalledWith("u1");
+  });
+
+  it("prefers call factory over namespace factoryGetter", async () => {
+    const driver = new InMemoryDriver();
+    const factoryGetter = vi.fn(async () => ({ id: "from-default" }));
+    const callFactory = vi.fn(async () => ({ id: "from-call" }));
+    const cache = createCache({
+      driver,
+      namespaces: {
+        user: namespace<{ id: string }, [id: string]>({
+          ttl: "1m",
+          factoryGetter,
+        }),
+      },
+    });
+
+    const value = await cache.user.getOrSet("u1", callFactory);
+
+    expect(value).toEqual({ id: "from-call" });
+    expect(callFactory).toHaveBeenCalledTimes(1);
+    expect(factoryGetter).not.toHaveBeenCalled();
+  });
+
+  it("throws when no call factory or namespace factoryGetter is available", async () => {
+    const driver = new InMemoryDriver();
+    const cache = createCache({
+      driver,
+      namespaces: {
+        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+      },
+    });
+
+    await expect(
+      (cache.user.getOrSet as (...params: unknown[]) => Promise<unknown>)("u1"),
+    ).rejects.toThrow(
+      "getOrSet requires a factory function or namespace factoryGetter",
+    );
+  });
+
   it("supports set/get/delete", async () => {
     const driver = new InMemoryDriver();
     const cache = createCache({

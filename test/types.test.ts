@@ -9,7 +9,11 @@ describe("type inference", () => {
       namespaces: {
         user: namespace<{ name: string }, [id: string]>({ ttl: "1m" }),
         reports: reportNamespace<[region: string]>({ ttl: "1m" }),
-        singleton: namespace<number>({ ttl: "1m" })
+        singleton: namespace<number>({ ttl: "1m" }),
+        userByFactoryGetter: namespace<{ id: string }, [id: string]>({
+          ttl: "1m",
+          factoryGetter: (id) => ({ id }),
+        }),
       },
       globalConfig: {
         layer1: { maxItems: 500 },
@@ -30,9 +34,16 @@ describe("type inference", () => {
     const user = await cache.user.getOrSet("u1", () => ({ name: "Ada" }));
     const singleton = await cache.singleton.getOrSet(() => 1);
     const report = await cache.reports.getOrSet("eu", () => ({ id: "r1" }));
+    const userFromGetter = await cache.userByFactoryGetter.getOrSet("u1");
+
+    if (false) {
+      // @ts-expect-error user namespace does not define factoryGetter
+      cache.user.getOrSet("u1");
+    }
 
     expectTypeOf(user).toEqualTypeOf<{ name: string }>();
     expectTypeOf(singleton).toEqualTypeOf<number>();
     expectTypeOf(report).toEqualTypeOf<{ id: string }>();
+    expectTypeOf(userFromGetter).toEqualTypeOf<{ id: string }>();
   });
 });

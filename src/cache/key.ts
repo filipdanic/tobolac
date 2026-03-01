@@ -23,9 +23,19 @@ export function getNamespaceKeyBuilder(namespace: AnyNamespace): KeyBuilder {
   return namespace.options.key as KeyBuilder;
 }
 
-export function parseGetOrSetCall(params: unknown[]): ParsedGetOrSetCall {
+export function parseGetOrSetCall(
+  params: unknown[],
+  factoryGetter?: (...keyArgs: unknown[]) => unknown | Promise<unknown>,
+): ParsedGetOrSetCall {
   if (params.length === 0) {
-    throw new Error("getOrSet requires at least a factory function");
+    if (!factoryGetter) {
+      throw new Error("getOrSet requires a factory function or namespace factoryGetter");
+    }
+
+    return {
+      keyArgs: [],
+      factory: () => factoryGetter(),
+    };
   }
 
   const last = params[params.length - 1];
@@ -37,14 +47,25 @@ export function parseGetOrSetCall(params: unknown[]): ParsedGetOrSetCall {
   }
 
   const maybeFactory = params[params.length - 2];
-  if (typeof maybeFactory !== "function") {
-    throw new Error("getOrSet requires a factory function");
+  if (typeof maybeFactory === "function") {
+    return {
+      factory: maybeFactory as () => unknown | Promise<unknown>,
+      keyArgs: params.slice(0, -2),
+      options: isOperationOptions(last) ? (last as OperationOptions) : undefined,
+    };
+  }
+
+  const options = isOperationOptions(last) ? (last as OperationOptions) : undefined;
+  const keyArgs = options ? params.slice(0, -1) : params;
+
+  if (!factoryGetter) {
+    throw new Error("getOrSet requires a factory function or namespace factoryGetter");
   }
 
   return {
-    factory: maybeFactory as () => unknown | Promise<unknown>,
-    keyArgs: params.slice(0, -2),
-    options: isOperationOptions(last) ? (last as OperationOptions) : undefined,
+    keyArgs,
+    options,
+    factory: () => factoryGetter(...keyArgs),
   };
 }
 

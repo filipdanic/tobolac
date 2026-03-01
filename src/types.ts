@@ -54,19 +54,35 @@ export interface NamespaceOptions<T, Args extends unknown[] = unknown[]> extends
   layer2?: Layer2Options;
   schema?: { parse(value: unknown): T };
   key?: (...args: Args) => string;
+  factoryGetter?: (...args: Args) => T | Promise<T>;
 }
 
-export interface NamespaceDefinition<T, Args extends unknown[] = []> {
+export interface NamespaceDefinition<
+  T,
+  Args extends unknown[] = [],
+  HasFactoryGetter extends boolean = false,
+> {
   readonly __kind: "namespace";
   readonly options: NamespaceOptions<T, Args>;
 }
 
-export type NamespacesShape = Record<string, NamespaceDefinition<any, any[]>>;
+export type NamespacesShape = Record<string, NamespaceDefinition<any, any[], boolean>>;
 
-export interface NamespaceApi<T, Args extends unknown[]> {
-  getOrSet: (
-    ...params: [...args: Args, factory: () => T | Promise<T>, options?: OperationOptions]
-  ) => Promise<T>;
+type Factory<T> = () => T | Promise<T>;
+
+type GetOrSetWithFactoryGetter<T, Args extends unknown[]> = {
+  (...params: [...args: Args, options?: OperationOptions]): Promise<T>;
+  (...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]): Promise<T>;
+};
+
+type GetOrSetWithoutFactoryGetter<T, Args extends unknown[]> = (
+  ...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]
+) => Promise<T>;
+
+export interface NamespaceApi<T, Args extends unknown[], HasFactoryGetter extends boolean = false> {
+  getOrSet: HasFactoryGetter extends true
+    ? GetOrSetWithFactoryGetter<T, Args>
+    : GetOrSetWithoutFactoryGetter<T, Args>;
   get: (...args: Args) => Promise<T | null>;
   set: (...params: [...args: Args, value: T, options?: OperationOptions]) => Promise<void>;
   delete: (...args: Args) => Promise<boolean>;
@@ -75,7 +91,9 @@ export interface NamespaceApi<T, Args extends unknown[]> {
 }
 
 export type CacheApi<S extends NamespacesShape> = {
-  [K in keyof S]: S[K] extends NamespaceDefinition<infer T, infer A> ? NamespaceApi<T, A> : never;
+  [K in keyof S]: S[K] extends NamespaceDefinition<infer T, infer A, infer H>
+    ? NamespaceApi<T, A, H>
+    : never;
 } & {
   clear: () => Promise<void>;
   stats: StatsAccessor;

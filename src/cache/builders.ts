@@ -32,7 +32,12 @@ export function createNamespaceApi(
   };
 
   const getOrSet = async (...params: unknown[]) => {
-    const parsed = parseGetOrSetCall(params);
+    const parsed = parseGetOrSetCall(
+      params,
+      namespace.options.factoryGetter as
+        | ((...keyArgs: unknown[]) => unknown | Promise<unknown>)
+        | undefined,
+    );
     const namespaceKey = makeNamespaceKey(parsed.keyArgs, keyBuilder);
     const stampedeKey = `${namespaceName}:${namespaceKey}`;
 
