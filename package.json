@@ -1,0 +1,40 @@
+{
+  "name": "tobolac",
+  "version": "0.1.0",
+  "description": "Multi-layer type-safe TypeScript cache library",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:node": "vitest run",
+    "test:bun": "bunx vitest run"
+  },
+  "dependencies": {
+    "lru-cache": "^11.2.2"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "bun-types": "^1.2.3",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}
