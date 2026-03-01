@@ -1,5 +1,14 @@
-import { getNamespaceKeyBuilder, makeNamespaceKey, parseGetOrSetCall, parseSetCall } from "./key";
-import { readFromLayers, resolveNamespaceSettings, writeToLayers } from "./layers";
+import {
+  getNamespaceKeyBuilder,
+  makeNamespaceKey,
+  parseGetOrSetCall,
+  parseSetCall,
+} from "./key";
+import {
+  readFromLayers,
+  resolveNamespaceSettings,
+  writeToLayers,
+} from "./layers";
 import type { AnyNamespace, CacheRuntimeDeps } from "./internal-types";
 
 export function createNamespaceApi(
@@ -42,10 +51,20 @@ export function createNamespaceApi(
                 deps.globalSettings,
                 parsed.options,
               );
-              writeToLayers(deps, namespaceName, namespaceKey, refreshed, effectiveSettings);
+              writeToLayers(
+                deps,
+                namespaceName,
+                namespaceKey,
+                refreshed,
+                effectiveSettings,
+              );
               return refreshed;
             } catch (error) {
-              deps.options.onRevalidateError?.(namespaceName, namespaceKey, error);
+              deps.options.onRevalidateError?.(
+                namespaceName,
+                namespaceKey,
+                error,
+              );
               throw error;
             }
           })
@@ -66,7 +85,13 @@ export function createNamespaceApi(
         parsed.options,
       );
       const value = await Promise.resolve(parsed.factory());
-      writeToLayers(deps, namespaceName, namespaceKey, value, effectiveSettings);
+      writeToLayers(
+        deps,
+        namespaceName,
+        namespaceKey,
+        value,
+        effectiveSettings,
+      );
       return value;
     });
   };
@@ -80,7 +105,13 @@ export function createNamespaceApi(
       parsed.options,
     );
 
-    writeToLayers(deps, namespaceName, namespaceKey, parsed.value, effectiveSettings);
+    writeToLayers(
+      deps,
+      namespaceName,
+      namespaceKey,
+      parsed.value,
+      effectiveSettings,
+    );
   };
 
   const del = async (...args: unknown[]) => {
@@ -90,15 +121,15 @@ export function createNamespaceApi(
       throw new Error(`Missing Layer 1 cache for namespace "${namespaceName}"`);
     }
 
-    const l1Deleted = layer1.delete(namespaceKey);
-    const l2Deleted = deps.layer2.delete(namespaceName, namespaceKey);
+    const layer1Deleted = layer1.delete(namespaceKey);
+    const layer2Deleted = deps.layer2.delete(namespaceName, namespaceKey);
 
-    if (l1Deleted || l2Deleted) {
+    if (layer1Deleted || layer2Deleted) {
       deps.stats.eviction(namespaceName, "manual");
       deps.options.onEvict?.(namespaceName, namespaceKey, "manual");
     }
 
-    return l1Deleted || l2Deleted;
+    return layer1Deleted || layer2Deleted;
   };
 
   const clear = async () => {
@@ -107,12 +138,12 @@ export function createNamespaceApi(
       throw new Error(`Missing Layer 1 cache for namespace "${namespaceName}"`);
     }
 
-    const l2Count = deps.layer2.countByNamespace(namespaceName);
-    const l1Count = layer1.count();
+    const layer2Count = deps.layer2.countByNamespace(namespaceName);
+    const layer1Count = layer1.count();
     layer1.clear();
     deps.layer2.deleteNamespace(namespaceName);
 
-    const total = Math.max(l2Count, l1Count);
+    const total = Math.max(layer2Count, layer1Count);
     for (let i = 0; i < total; i += 1) {
       deps.stats.eviction(namespaceName, "manual");
     }
@@ -131,7 +162,10 @@ export function createNamespaceApi(
   };
 }
 
-export function createGlobalApi(deps: CacheRuntimeDeps, namespaceNames: string[]) {
+export function createGlobalApi(
+  deps: CacheRuntimeDeps,
+  namespaceNames: string[],
+) {
   const clear = async () => {
     for (const namespaceName of namespaceNames) {
       const layer1 = deps.layer1ByNamespace.get(namespaceName);

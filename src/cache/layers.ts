@@ -7,7 +7,12 @@ import type {
   NamespaceDefinition,
   OperationOptions,
 } from "../types";
-import type { AnyNamespace, CacheRuntimeDeps, GlobalResolvedSettings, NamespaceResolvedSettings } from "./internal-types";
+import type {
+  AnyNamespace,
+  CacheRuntimeDeps,
+  GlobalResolvedSettings,
+  NamespaceResolvedSettings,
+} from "./internal-types";
 
 export function resolveNamespaceSettings(
   namespace: AnyNamespace,
@@ -20,8 +25,10 @@ export function resolveNamespaceSettings(
   return {
     ttl: parseDuration(callOverrides?.ttl, namespaceTtl),
     swr: parseDuration(callOverrides?.swr, namespaceSwr),
-    layer1MaxItems: namespace.options.layer1?.maxItems ?? globalSettings.layer1MaxItems,
-    layer2MaxItems: namespace.options.layer2?.maxItems ?? globalSettings.layer2MaxItems,
+    layer1MaxItems:
+      namespace.options.layer1?.maxItems ?? globalSettings.layer1MaxItems,
+    layer2MaxItems:
+      namespace.options.layer2?.maxItems ?? globalSettings.layer2MaxItems,
   };
 }
 
@@ -38,12 +45,16 @@ function runLayer2MaxItems(
   namespaceName: string,
   layer2MaxItems: number,
 ): void {
-  const maybeWithEviction = deps.layer2 as CacheDriver & Partial<DriverWithNamespaceMaxItems>;
+  const maybeWithEviction = deps.layer2 as CacheDriver &
+    Partial<DriverWithNamespaceMaxItems>;
   if (typeof maybeWithEviction.enforceMaxItemsForNamespace !== "function") {
     return;
   }
 
-  const removed = maybeWithEviction.enforceMaxItemsForNamespace(namespaceName, layer2MaxItems);
+  const removed = maybeWithEviction.enforceMaxItemsForNamespace(
+    namespaceName,
+    layer2MaxItems,
+  );
   for (let i = 0; i < removed; i += 1) {
     deps.stats.eviction(namespaceName, "lru");
     deps.options.onEvict?.(namespaceName, namespaceName, "lru");
@@ -59,9 +70,9 @@ export function readFromLayers<T>(
   const now = Date.now();
   const layer1 = getNamespaceLayer1(deps, namespaceName);
 
-  const l1Entry = layer1.get(namespaceKey);
-  if (l1Entry) {
-    const state = getEntryState(l1Entry, now);
+  const layer1Entry = layer1.get(namespaceKey);
+  if (layer1Entry) {
+    const state = getEntryState(layer1Entry, now);
     if (state === "expired") {
       layer1.delete(namespaceKey);
       deps.stats.eviction(namespaceName, "ttl");
@@ -69,7 +80,7 @@ export function readFromLayers<T>(
     } else {
       return {
         state,
-        value: deps.serializer.deserialize<T>(l1Entry.value),
+        value: deps.serializer.deserialize<T>(layer1Entry.value),
         source: "layer1",
       };
     }

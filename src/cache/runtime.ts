@@ -2,9 +2,9 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { detectRuntime } from "../detect";
 import { parseDuration } from "../duration";
-import { MemoryCache } from "../l1/memory";
-import { BunSqliteDriver } from "../l2/driver/bun-sqlite";
-import { NodeSqliteDriver } from "../l2/driver/node-sqlite";
+import { MemoryCache } from "../layer1/memory";
+import { BunSqliteDriver } from "../layer2/driver/bun-sqlite";
+import { NodeSqliteDriver } from "../layer2/driver/node-sqlite";
 import { jsonSerializer } from "../serializer";
 import { StampedeGuard } from "../stampede";
 import { StatsTracker } from "../stats";
@@ -36,16 +36,25 @@ function resolveDriver(options: CacheOptions<NamespacesShape>): CacheDriver {
   return new NodeSqliteDriver(path);
 }
 
-export function resolveGlobalSettings(options: CacheOptions<NamespacesShape>): GlobalResolvedSettings {
+export function resolveGlobalSettings(
+  options: CacheOptions<NamespacesShape>,
+): GlobalResolvedSettings {
   return {
-    ttl: parseDuration(options.globalConfig?.ttl, parseDuration(DEFAULT_GLOBAL_TTL, 600_000)),
+    ttl: parseDuration(
+      options.globalConfig?.ttl,
+      parseDuration(DEFAULT_GLOBAL_TTL, 600_000),
+    ),
     swr: parseDuration(options.globalConfig?.swr, 0),
-    layer1MaxItems: options.globalConfig?.layer1?.maxItems ?? DEFAULT_LAYER1_MAX_ITEMS,
-    layer2MaxItems: options.globalConfig?.layer2?.maxItems ?? DEFAULT_LAYER2_MAX_ITEMS,
+    layer1MaxItems:
+      options.globalConfig?.layer1?.maxItems ?? DEFAULT_LAYER1_MAX_ITEMS,
+    layer2MaxItems:
+      options.globalConfig?.layer2?.maxItems ?? DEFAULT_LAYER2_MAX_ITEMS,
   };
 }
 
-export function resolveRuntimeSettings(options: CacheOptions<NamespacesShape>): RuntimeResolvedSettings {
+export function resolveRuntimeSettings(
+  options: CacheOptions<NamespacesShape>,
+): RuntimeResolvedSettings {
   return {
     pruneInterval: parseDuration(
       options.globalConfig?.sqlite?.pruneInterval,
@@ -63,8 +72,11 @@ export function createRuntimeDeps(
   const layer2 = resolveDriver(options);
   const layer1ByNamespace = new Map<string, MemoryCache>();
 
-  for (const [namespaceName, namespaceDef] of Object.entries(options.namespaces)) {
-    const maxItems = namespaceDef.options.layer1?.maxItems ?? globalSettings.layer1MaxItems;
+  for (const [namespaceName, namespaceDef] of Object.entries(
+    options.namespaces,
+  )) {
+    const maxItems =
+      namespaceDef.options.layer1?.maxItems ?? globalSettings.layer1MaxItems;
     layer1ByNamespace.set(
       namespaceName,
       new MemoryCache(maxItems, (namespaceKey) => {

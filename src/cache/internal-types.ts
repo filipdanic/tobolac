@@ -1,8 +1,14 @@
-import { MemoryCache } from "../l1/memory";
+import { MemoryCache } from "../layer1/memory";
 import { jsonSerializer } from "../serializer";
 import { StampedeGuard } from "../stampede";
 import { StatsTracker } from "../stats";
-import type { CacheDriver, CacheOptions, NamespaceDefinition, NamespacesShape, OperationOptions } from "../types";
+import type {
+  CacheDriver,
+  CacheOptions,
+  NamespaceDefinition,
+  NamespacesShape,
+  OperationOptions,
+} from "../types";
 
 export type AnyNamespace = NamespaceDefinition<unknown, unknown[]>;
 export type KeyBuilder = ((...args: unknown[]) => string) | undefined;
