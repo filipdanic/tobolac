@@ -12,7 +12,6 @@ export const CREATE_TABLE_SQL = `
     created_at INTEGER NOT NULL,
     ttl INTEGER NOT NULL,
     swr INTEGER NOT NULL DEFAULT 0,
-    last_accessed_at INTEGER NOT NULL,
     PRIMARY KEY(namespace, key)
   )
 `;
@@ -22,20 +21,19 @@ export const CREATE_EXPIRY_INDEX_SQL = `
 `;
 
 export const GET_SQL = `
-  SELECT value, created_at, ttl, swr, last_accessed_at
+  SELECT value, created_at, ttl, swr
   FROM cache_entries
   WHERE namespace = :namespace AND key = :key
 `;
 
 export const SET_SQL = `
-  INSERT INTO cache_entries(namespace, key, value, created_at, ttl, swr, last_accessed_at)
-  VALUES (:namespace, :key, :value, :created_at, :ttl, :swr, :last_accessed_at)
+  INSERT INTO cache_entries(namespace, key, value, created_at, ttl, swr)
+  VALUES (:namespace, :key, :value, :created_at, :ttl, :swr)
   ON CONFLICT(namespace, key) DO UPDATE SET
     value = excluded.value,
     created_at = excluded.created_at,
     ttl = excluded.ttl,
-    swr = excluded.swr,
-    last_accessed_at = excluded.last_accessed_at
+    swr = excluded.swr
 `;
 
 export const DELETE_SQL = `
@@ -65,12 +63,6 @@ export const COUNT_BY_NAMESPACE_SQL = `
   WHERE namespace = :namespace
 `;
 
-export const TOUCH_SQL = `
-  UPDATE cache_entries
-  SET last_accessed_at = MAX(last_accessed_at, :last_accessed_at)
-  WHERE namespace = :namespace AND key = :key
-`;
-
 export const CREATE_MIGRATION_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS cache_entries_v2 (
     namespace TEXT NOT NULL,
@@ -79,13 +71,12 @@ export const CREATE_MIGRATION_TABLE_SQL = `
     created_at INTEGER NOT NULL,
     ttl INTEGER NOT NULL,
     swr INTEGER NOT NULL DEFAULT 0,
-    last_accessed_at INTEGER NOT NULL,
     PRIMARY KEY(namespace, key)
   )
 `;
 
 export const COPY_LEGACY_ROWS_SQL = `
-  INSERT INTO cache_entries_v2(namespace, key, value, created_at, ttl, swr, last_accessed_at)
+  INSERT INTO cache_entries_v2(namespace, key, value, created_at, ttl, swr)
   SELECT
     CASE
       WHEN instr(key, ':') > 0 THEN substr(key, 1, instr(key, ':') - 1)
@@ -98,8 +89,13 @@ export const COPY_LEGACY_ROWS_SQL = `
     value,
     created_at,
     ttl,
-    swr,
-    last_accessed_at
+    swr
+  FROM cache_entries
+`;
+
+export const COPY_NAMESPACED_ROWS_SQL = `
+  INSERT INTO cache_entries_v2(namespace, key, value, created_at, ttl, swr)
+  SELECT namespace, key, value, created_at, ttl, swr
   FROM cache_entries
 `;
 

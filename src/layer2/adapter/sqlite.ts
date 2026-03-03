@@ -13,7 +13,6 @@ export interface SqliteRawRow {
   created_at: number;
   ttl: number;
   swr: number;
-  last_accessed_at: number;
 }
 
 export function normalizeBlobValue(value: Buffer | Uint8Array): Buffer {
