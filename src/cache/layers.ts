@@ -1,9 +1,7 @@
 import { parseDuration } from "../duration";
 import { getEntryState } from "../swr";
 import type {
-  CacheDriver,
   CacheEntry,
-  DriverWithNamespaceMaxItems,
   NamespaceDefinition,
   OperationOptions,
 } from "../types";
@@ -27,8 +25,6 @@ export function resolveNamespaceSettings(
     swr: parseDuration(callOverrides?.swr, namespaceSwr),
     layer1MaxItems:
       namespace.options.layer1?.maxItems ?? globalSettings.layer1MaxItems,
-    layer2MaxItems:
-      namespace.options.layer2?.maxItems ?? globalSettings.layer2MaxItems,
   };
 }
 
@@ -38,27 +34,6 @@ function getNamespaceLayer1(deps: CacheRuntimeDeps, namespaceName: string) {
     throw new Error(`Missing Layer 1 cache for namespace "${namespaceName}"`);
   }
   return layer1;
-}
-
-function runLayer2MaxItems(
-  deps: CacheRuntimeDeps,
-  namespaceName: string,
-  layer2MaxItems: number,
-): void {
-  const maybeWithEviction = deps.layer2 as CacheDriver &
-    Partial<DriverWithNamespaceMaxItems>;
-  if (typeof maybeWithEviction.enforceMaxItemsForNamespace !== "function") {
-    return;
-  }
-
-  const removed = maybeWithEviction.enforceMaxItemsForNamespace(
-    namespaceName,
-    layer2MaxItems,
-  );
-  for (let i = 0; i < removed; i += 1) {
-    deps.stats.eviction(namespaceName, "lru");
-    deps.options.onEvict?.(namespaceName, namespaceName, "lru");
-  }
 }
 
 export function readFromLayers<T>(
@@ -140,5 +115,4 @@ export function writeToLayers<T>(
 
   layer1.set(namespaceKey, entry);
   deps.layer2.set(namespaceName, namespaceKey, entry);
-  runLayer2MaxItems(deps, namespaceName, effectiveSettings.layer2MaxItems);
 }

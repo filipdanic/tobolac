@@ -5,6 +5,7 @@ import { parseDuration } from "../duration";
 import { MemoryCache } from "../layer1/memory";
 import { BunSqliteDriver } from "../layer2/driver/bun-sqlite";
 import { NodeSqliteDriver } from "../layer2/driver/node-sqlite";
+import { WriteBehindCacheDriver } from "../layer2/write-behind-driver";
 import { jsonSerializer } from "../serializer";
 import { StampedeGuard } from "../stampede";
 import { StatsTracker } from "../stats";
@@ -18,7 +19,6 @@ import type {
 const DEFAULT_GLOBAL_TTL = "10m";
 const DEFAULT_PRUNE_INTERVAL = "5m";
 const DEFAULT_LAYER1_MAX_ITEMS = 1_000;
-const DEFAULT_LAYER2_MAX_ITEMS = 20_000;
 
 function resolveDriver(options: CacheOptions<NamespacesShape>): CacheDriver {
   if (options.driver) {
@@ -47,8 +47,6 @@ export function resolveGlobalSettings(
     swr: parseDuration(options.globalConfig?.swr, 0),
     layer1MaxItems:
       options.globalConfig?.layer1?.maxItems ?? DEFAULT_LAYER1_MAX_ITEMS,
-    layer2MaxItems:
-      options.globalConfig?.layer2?.maxItems ?? DEFAULT_LAYER2_MAX_ITEMS,
   };
 }
 
@@ -69,7 +67,10 @@ export function createRuntimeDeps(
   runtimeSettings: RuntimeResolvedSettings,
 ): CacheRuntimeDeps {
   const stats = new StatsTracker();
-  const layer2 = resolveDriver(options);
+  const resolvedLayer2 = resolveDriver(options);
+  const layer2 = options.driver
+    ? resolvedLayer2
+    : new WriteBehindCacheDriver(resolvedLayer2);
   const layer1ByNamespace = new Map<string, MemoryCache>();
 
   for (const [namespaceName, namespaceDef] of Object.entries(

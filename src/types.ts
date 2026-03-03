@@ -45,13 +45,8 @@ export interface Layer1Options {
   maxItems?: number;
 }
 
-export interface Layer2Options {
-  maxItems?: number;
-}
-
 export interface NamespaceOptions<T, Args extends unknown[] = unknown[]> extends OperationOptions {
   layer1?: Layer1Options;
-  layer2?: Layer2Options;
   schema?: { parse(value: unknown): T };
   key?: (...args: Args) => string;
   factoryGetter?: (...args: Args) => T | Promise<T>;
@@ -102,7 +97,6 @@ export type CacheApi<S extends NamespacesShape> = {
 
 export interface GlobalConfig extends OperationOptions {
   layer1?: Layer1Options;
-  layer2?: Layer2Options;
   sqlite?: {
     path?: string;
     pruneInterval?: Duration;
@@ -117,8 +111,4 @@ export interface CacheOptions<S extends NamespacesShape> {
   onValidationError?: (namespaceName: string, key: string, error: unknown) => void;
   onEvict?: (namespaceName: string, key: string, reason: EvictionReason) => void;
   driver?: CacheDriver;
-}
-
-export interface DriverWithNamespaceMaxItems extends CacheDriver {
-  enforceMaxItemsForNamespace(namespace: string, maxItems: number): number;
 }

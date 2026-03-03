@@ -1,7 +1,6 @@
 import type {
   CacheDriver,
   CacheEntry,
-  DriverWithNamespaceMaxItems,
 } from "../types";
 import {
   normalizeBlobValue,
@@ -16,12 +15,10 @@ import {
   COUNT_SQL,
   CREATE_MIGRATION_TABLE_SQL,
   CREATE_EXPIRY_INDEX_SQL,
-  CREATE_NAMESPACE_LRU_INDEX_SQL,
   CREATE_TABLE_SQL,
   DROP_LEGACY_TABLE_SQL,
   DELETE_NAMESPACE_SQL,
   DELETE_SQL,
-  ENFORCE_NAMESPACE_MAX_ITEMS_SQL,
   GET_SQL,
   PRUNE_SQL,
   GET_TABLE_SCHEMA_SQL,
@@ -34,7 +31,15 @@ interface TableSchemaRow {
   sql: string;
 }
 
-export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems {
+interface PendingTouch {
+  namespace: string;
+  key: string;
+  lastAccessedAt: number;
+}
+
+const NAMESPACE_SEPARATOR = "\u0000";
+
+export class SqliteL2Driver implements CacheDriver {
   private readonly getStmt: SqliteStatement<SqliteRawRow | null | undefined>;
   private readonly setStmt: SqliteStatement;
   private readonly deleteStmt: SqliteStatement;
@@ -44,13 +49,14 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
   private readonly countStmt: SqliteStatement<{ count: number }>;
   private readonly countByNamespaceStmt: SqliteStatement<{ count: number }>;
   private readonly touchStmt: SqliteStatement;
-  private readonly enforceMaxItemsStmt: SqliteStatement;
+  private readonly pendingTouches = new Map<string, PendingTouch>();
+  private flushTouchesTimer: ReturnType<typeof setTimeout> | null = null;
+  private isFlushingTouches = false;
 
   constructor(private readonly db: SqliteConnection) {
     this.ensureSchema();
 
     this.db.prepare(CREATE_EXPIRY_INDEX_SQL).run();
-    this.db.prepare(CREATE_NAMESPACE_LRU_INDEX_SQL).run();
 
     this.getStmt = this.db.prepare<SqliteRawRow | null | undefined>(GET_SQL);
     this.setStmt = this.db.prepare(SET_SQL);
@@ -63,7 +69,6 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
       COUNT_BY_NAMESPACE_SQL,
     );
     this.touchStmt = this.db.prepare(TOUCH_SQL);
-    this.enforceMaxItemsStmt = this.db.prepare(ENFORCE_NAMESPACE_MAX_ITEMS_SQL);
   }
 
   private ensureSchema(): void {
@@ -81,6 +86,72 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
     }
   }
 
+  private makeScopedKey(namespace: string, key: string): string {
+    return `${namespace}${NAMESPACE_SEPARATOR}${key}`;
+  }
+
+  private scheduleTouchFlush(delayMs: number = 0): void {
+    if (this.flushTouchesTimer) {
+      return;
+    }
+
+    this.flushTouchesTimer = setTimeout(() => {
+      this.flushTouchesTimer = null;
+      this.flushTouches();
+    }, delayMs);
+  }
+
+  private queueTouch(namespace: string, key: string, lastAccessedAt: number): void {
+    const scopedKey = this.makeScopedKey(namespace, key);
+    const existing = this.pendingTouches.get(scopedKey);
+    if (!existing || lastAccessedAt > existing.lastAccessedAt) {
+      this.pendingTouches.set(scopedKey, {
+        namespace,
+        key,
+        lastAccessedAt,
+      });
+    }
+
+    this.scheduleTouchFlush(0);
+  }
+
+  private flushTouches(): void {
+    if (this.isFlushingTouches || this.pendingTouches.size === 0) {
+      return;
+    }
+
+    this.isFlushingTouches = true;
+    const batch = [...this.pendingTouches.values()];
+    this.pendingTouches.clear();
+
+    for (let i = 0; i < batch.length; i += 1) {
+      const touch = batch[i];
+      try {
+        this.touchStmt.run({
+          namespace: touch.namespace,
+          key: touch.key,
+          last_accessed_at: touch.lastAccessedAt,
+        });
+      } catch {
+        for (let j = i; j < batch.length; j += 1) {
+          const pending = batch[j];
+          this.pendingTouches.set(
+            this.makeScopedKey(pending.namespace, pending.key),
+            pending,
+          );
+        }
+        this.isFlushingTouches = false;
+        this.scheduleTouchFlush(10);
+        return;
+      }
+    }
+
+    this.isFlushingTouches = false;
+    if (this.pendingTouches.size > 0) {
+      this.scheduleTouchFlush(0);
+    }
+  }
+
   get(namespace: string, key: string): CacheEntry | null {
     const row = this.getStmt.get({ namespace, key });
     if (!row) {
@@ -88,7 +159,7 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
     }
 
     const now = Date.now();
-    this.touchStmt.run({ namespace, key, last_accessed_at: now });
+    this.queueTouch(namespace, key, now);
 
     return {
       value: normalizeBlobValue(row.value),
@@ -112,14 +183,23 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
   }
 
   delete(namespace: string, key: string): boolean {
+    this.pendingTouches.delete(this.makeScopedKey(namespace, key));
     return this.deleteStmt.run({ namespace, key }).changes > 0;
   }
 
   deleteNamespace(namespace: string): void {
+    const prefix = `${namespace}${NAMESPACE_SEPARATOR}`;
+    for (const scopedKey of this.pendingTouches.keys()) {
+      if (scopedKey.startsWith(prefix)) {
+        this.pendingTouches.delete(scopedKey);
+      }
+    }
+
     this.deleteNamespaceStmt.run({ namespace });
   }
 
   clear(): void {
+    this.pendingTouches.clear();
     this.clearStmt.run();
   }
 
@@ -128,6 +208,11 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
   }
 
   close(): void {
+    if (this.flushTouchesTimer) {
+      clearTimeout(this.flushTouchesTimer);
+      this.flushTouchesTimer = null;
+    }
+    this.flushTouches();
     this.db.close();
   }
 
@@ -137,12 +222,5 @@ export class SqliteL2Driver implements CacheDriver, DriverWithNamespaceMaxItems 
 
   countByNamespace(namespace: string): number {
     return this.countByNamespaceStmt.get({ namespace }).count;
-  }
-
-  enforceMaxItemsForNamespace(namespace: string, maxItems: number): number {
-    return this.enforceMaxItemsStmt.run({
-      namespace,
-      maxItems,
-    }).changes;
   }
 }

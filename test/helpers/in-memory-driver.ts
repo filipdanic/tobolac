@@ -1,6 +1,6 @@
-import type { CacheDriver, CacheEntry, DriverWithNamespaceMaxItems } from "../../src/types";
+import type { CacheDriver, CacheEntry } from "../../src/types";
 
-export class InMemoryDriver implements CacheDriver, DriverWithNamespaceMaxItems {
+export class InMemoryDriver implements CacheDriver {
   private readonly entries = new Map<string, CacheEntry>();
 
   private makeScopedKey(namespace: string, key: string): string {
@@ -69,17 +69,5 @@ export class InMemoryDriver implements CacheDriver, DriverWithNamespaceMaxItems 
       }
     }
     return count;
-  }
-
-  enforceMaxItemsForNamespace(namespace: string, maxItems: number): number {
-    const scoped = [...this.entries.entries()]
-      .filter(([scopedKey]) => this.parseNamespace(scopedKey) === namespace)
-      .sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt);
-
-    const overflow = Math.max(0, scoped.length - maxItems);
-    for (let i = 0; i < overflow; i += 1) {
-      this.entries.delete(scoped[i][0]);
-    }
-    return overflow;
   }
 }

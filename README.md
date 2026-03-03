@@ -58,7 +58,7 @@ const cache = createCache({
     layer1: { maxItems: 1_000 },
     layer2:{ maxItems: 50_000 },
     sqlite: {
-      path: './cache/sqlite/',
+      path: './cache/sqlite/cache.db',
       pruneInterval: '1h',
     },
   },

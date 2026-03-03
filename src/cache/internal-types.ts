@@ -17,14 +17,12 @@ export interface NamespaceResolvedSettings {
   ttl: number;
   swr: number;
   layer1MaxItems: number;
-  layer2MaxItems: number;
 }
 
 export interface GlobalResolvedSettings {
   ttl: number;
   swr: number;
   layer1MaxItems: number;
-  layer2MaxItems: number;
 }
 
 export interface RuntimeResolvedSettings {

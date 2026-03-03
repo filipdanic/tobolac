@@ -17,11 +17,6 @@ export const CREATE_TABLE_SQL = `
   )
 `;
 
-export const CREATE_NAMESPACE_LRU_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS idx_cache_namespace_lru
-  ON cache_entries (namespace, last_accessed_at)
-`;
-
 export const CREATE_EXPIRY_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS idx_cache_expiry ON cache_entries (created_at, ttl, swr)
 `;
@@ -72,23 +67,8 @@ export const COUNT_BY_NAMESPACE_SQL = `
 
 export const TOUCH_SQL = `
   UPDATE cache_entries
-  SET last_accessed_at = :last_accessed_at
+  SET last_accessed_at = MAX(last_accessed_at, :last_accessed_at)
   WHERE namespace = :namespace AND key = :key
-`;
-
-export const ENFORCE_NAMESPACE_MAX_ITEMS_SQL = `
-  DELETE FROM cache_entries
-  WHERE rowid IN (
-    SELECT rowid
-    FROM cache_entries
-    WHERE namespace = :namespace
-    ORDER BY last_accessed_at ASC
-    LIMIT (
-      SELECT MAX(0, COUNT(*) - :maxItems)
-      FROM cache_entries
-      WHERE namespace = :namespace
-    )
-  )
 `;
 
 export const CREATE_MIGRATION_TABLE_SQL = `
