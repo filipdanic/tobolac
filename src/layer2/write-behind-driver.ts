@@ -8,11 +8,14 @@ interface PendingWrite {
 }
 
 const NAMESPACE_SEPARATOR = "\u0000";
+const FLUSH_CHUNK_SIZE = 1024;
 
 export class WriteBehindCacheDriver implements CacheDriver {
   private readonly pendingWrites = new Map<string, PendingWrite>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private isFlushing = false;
+  private isClosing = false;
+  private isClosed = false;
 
   constructor(private readonly inner: CacheDriver) {}
 
@@ -21,7 +24,7 @@ export class WriteBehindCacheDriver implements CacheDriver {
   }
 
   private scheduleFlush(delayMs: number = 0): void {
-    if (this.flushTimer) {
+    if (this.flushTimer || this.isClosing || this.isClosed) {
       return;
     }
 
@@ -29,6 +32,54 @@ export class WriteBehindCacheDriver implements CacheDriver {
       this.flushTimer = null;
       this.flushPending();
     }, delayMs);
+    this.flushTimer.unref?.();
+  }
+
+  private takePendingChunk(maxItems: number): PendingWrite[] {
+    const chunk: PendingWrite[] = [];
+    const iterator = this.pendingWrites.entries();
+    while (chunk.length < maxItems) {
+      const next = iterator.next();
+      if (next.done) {
+        break;
+      }
+      const [scopedKey, write] = next.value;
+      this.pendingWrites.delete(scopedKey);
+      chunk.push(write);
+    }
+    return chunk;
+  }
+
+  private flushChunk(chunk: PendingWrite[]): boolean {
+    if (chunk.length === 0) {
+      return true;
+    }
+
+    if (this.inner.setMany) {
+      try {
+        this.inner.setMany(chunk);
+        return true;
+      } catch {
+        for (let i = 0; i < chunk.length; i += 1) {
+          this.pendingWrites.set(chunk[i].scopedKey, chunk[i]);
+        }
+        return false;
+      }
+    }
+
+    for (let i = 0; i < chunk.length; i += 1) {
+      const write = chunk[i];
+      try {
+        this.inner.set(write.namespace, write.key, write.entry);
+      } catch {
+        for (let j = i; j < chunk.length; j += 1) {
+          this.pendingWrites.set(chunk[j].scopedKey, chunk[j]);
+        }
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private flushPending(): void {
@@ -37,44 +88,20 @@ export class WriteBehindCacheDriver implements CacheDriver {
     }
 
     this.isFlushing = true;
-    const batch = [...this.pendingWrites.values()];
-    this.pendingWrites.clear();
-
-    if (this.inner.setMany) {
-      try {
-        this.inner.setMany(batch);
-      } catch {
-        for (let i = 0; i < batch.length; i += 1) {
-          this.pendingWrites.set(batch[i].scopedKey, batch[i]);
-        }
+    while (this.pendingWrites.size > 0) {
+      const chunk = this.takePendingChunk(FLUSH_CHUNK_SIZE);
+      const flushed = this.flushChunk(chunk);
+      if (!flushed) {
         this.isFlushing = false;
-        this.scheduleFlush(10);
-        return;
-      }
-
-      this.isFlushing = false;
-      if (this.pendingWrites.size > 0) {
-        this.scheduleFlush(0);
-      }
-      return;
-    }
-
-    for (let i = 0; i < batch.length; i += 1) {
-      const write = batch[i];
-      try {
-        this.inner.set(write.namespace, write.key, write.entry);
-      } catch {
-        for (let j = i; j < batch.length; j += 1) {
-          this.pendingWrites.set(batch[j].scopedKey, batch[j]);
+        if (!this.isClosing && !this.isClosed) {
+          this.scheduleFlush(10);
         }
-        this.isFlushing = false;
-        this.scheduleFlush(10);
         return;
       }
     }
 
     this.isFlushing = false;
-    if (this.pendingWrites.size > 0) {
+    if (this.pendingWrites.size > 0 && !this.isClosing && !this.isClosed) {
       this.scheduleFlush(0);
     }
   }
@@ -82,7 +109,7 @@ export class WriteBehindCacheDriver implements CacheDriver {
   get(namespace: string, key: string): CacheEntry | null {
     const pending = this.pendingWrites.get(this.makeScopedKey(namespace, key));
     if (pending) {
-      return { ...pending.entry };
+      return pending.entry;
     }
 
     return this.inner.get(namespace, key);
@@ -94,7 +121,7 @@ export class WriteBehindCacheDriver implements CacheDriver {
       scopedKey,
       namespace,
       key,
-      entry: { ...entry },
+      entry,
     });
     this.scheduleFlush(0);
   }
@@ -126,12 +153,18 @@ export class WriteBehindCacheDriver implements CacheDriver {
   }
 
   close(): void {
+    if (this.isClosed) {
+      return;
+    }
+
+    this.isClosing = true;
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
 
     this.flushPending();
+    this.isClosed = true;
     this.inner.close();
   }
 

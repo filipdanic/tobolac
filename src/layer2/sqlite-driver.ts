@@ -1,7 +1,4 @@
-import type {
-  CacheDriver,
-  CacheEntry,
-} from "../types";
+import type { CacheDriver, CacheEntry } from "../types";
 import {
   normalizeBlobValue,
   type SqliteConnection,
@@ -10,11 +7,8 @@ import {
 } from "./adapter/sqlite";
 import {
   CLEAR_SQL,
-  COPY_NAMESPACED_ROWS_SQL,
-  COPY_LEGACY_ROWS_SQL,
   COUNT_BY_NAMESPACE_SQL,
   COUNT_SQL,
-  CREATE_MIGRATION_TABLE_SQL,
   CREATE_EXPIRY_INDEX_SQL,
   CREATE_TABLE_SQL,
   DROP_LEGACY_TABLE_SQL,
@@ -23,7 +17,6 @@ import {
   GET_SQL,
   PRUNE_SQL,
   GET_TABLE_SCHEMA_SQL,
-  RENAME_MIGRATED_TABLE_SQL,
   SET_SQL,
 } from "./sqlite-sql";
 
@@ -48,6 +41,7 @@ export class SqliteL2Driver implements CacheDriver {
     this.ensureSchema();
 
     this.db.prepare(CREATE_EXPIRY_INDEX_SQL).run();
+    this.db.prepare("PRAGMA journal_mode = WAL;").run();
 
     this.getStmt = this.db.prepare<SqliteRawRow | null | undefined>(GET_SQL);
     this.setStmt = this.db.prepare(SET_SQL);
@@ -65,22 +59,12 @@ export class SqliteL2Driver implements CacheDriver {
   }
 
   private ensureSchema(): void {
-    const schema = this.db.prepare<TableSchemaRow | null>(GET_TABLE_SCHEMA_SQL).get();
+    const schema = this.db
+      .prepare<TableSchemaRow | null>(GET_TABLE_SCHEMA_SQL)
+      .get();
     if (!schema) {
       this.db.prepare(CREATE_TABLE_SQL).run();
       return;
-    }
-
-    const hasNamespace = schema.sql.includes("namespace");
-    const hasLastAccessedAt = schema.sql.includes("last_accessed_at");
-
-    if (!hasNamespace || hasLastAccessedAt) {
-      this.db.prepare(CREATE_MIGRATION_TABLE_SQL).run();
-      this.db
-        .prepare(hasNamespace ? COPY_NAMESPACED_ROWS_SQL : COPY_LEGACY_ROWS_SQL)
-        .run();
-      this.db.prepare(DROP_LEGACY_TABLE_SQL).run();
-      this.db.prepare(RENAME_MIGRATED_TABLE_SQL).run();
     }
   }
 
@@ -110,7 +94,11 @@ export class SqliteL2Driver implements CacheDriver {
   }
 
   setMany(
-    writes: ReadonlyArray<{ namespace: string; key: string; entry: CacheEntry }>,
+    writes: ReadonlyArray<{
+      namespace: string;
+      key: string;
+      entry: CacheEntry;
+    }>,
   ): void {
     if (writes.length === 0) {
       return;

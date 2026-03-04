@@ -23,7 +23,7 @@
     "test": "vitest run",
     "test:node": "vitest run",
     "test:bun": "bunx vitest run",
-    "bench:getorset:bun": "bun run build && bun benchmark/getorset.ts"
+    "bench:getorset:bun": "bun run build && bun --cpu-prof benchmark/getorset.ts"
   },
   "dependencies": {
     "lru-cache": "^11.2.2"

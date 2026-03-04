@@ -1,7 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { createCache, namespace } from "../dist/index.js";
 
-function sleep(ms) {
+function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 

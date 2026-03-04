@@ -63,41 +63,4 @@ export const COUNT_BY_NAMESPACE_SQL = `
   WHERE namespace = :namespace
 `;
 
-export const CREATE_MIGRATION_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS cache_entries_v2 (
-    namespace TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value BLOB NOT NULL,
-    created_at INTEGER NOT NULL,
-    ttl INTEGER NOT NULL,
-    swr INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY(namespace, key)
-  )
-`;
-
-export const COPY_LEGACY_ROWS_SQL = `
-  INSERT INTO cache_entries_v2(namespace, key, value, created_at, ttl, swr)
-  SELECT
-    CASE
-      WHEN instr(key, ':') > 0 THEN substr(key, 1, instr(key, ':') - 1)
-      ELSE 'default'
-    END AS namespace,
-    CASE
-      WHEN instr(key, ':') > 0 THEN substr(key, instr(key, ':') + 1)
-      ELSE key
-    END AS key,
-    value,
-    created_at,
-    ttl,
-    swr
-  FROM cache_entries
-`;
-
-export const COPY_NAMESPACED_ROWS_SQL = `
-  INSERT INTO cache_entries_v2(namespace, key, value, created_at, ttl, swr)
-  SELECT namespace, key, value, created_at, ttl, swr
-  FROM cache_entries
-`;
-
 export const DROP_LEGACY_TABLE_SQL = `DROP TABLE cache_entries`;
-export const RENAME_MIGRATED_TABLE_SQL = `ALTER TABLE cache_entries_v2 RENAME TO cache_entries`;

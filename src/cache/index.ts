@@ -21,6 +21,7 @@ export function createCache<S extends NamespacesShape>(
   const pruneTimer = setInterval(() => {
     deps.layer2.prune(Date.now());
   }, runtimeSettings.pruneInterval);
+  pruneTimer.unref?.();
 
   const result: Record<string, unknown> = {};
   for (const [namespaceName, namespaceDef] of Object.entries(
