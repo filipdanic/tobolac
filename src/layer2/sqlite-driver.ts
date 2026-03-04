@@ -89,7 +89,6 @@ export class SqliteL2Driver implements CacheDriver {
       createdAt: row.created_at,
       ttl: row.ttl,
       swr: row.swr,
-      lastAccessedAt: Date.now(),
     };
   }
 

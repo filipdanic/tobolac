@@ -17,7 +17,6 @@ export class InMemoryDriver implements CacheDriver {
     if (!entry) {
       return null;
     }
-    entry.lastAccessedAt = Date.now();
     return { ...entry };
   }
 

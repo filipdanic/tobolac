@@ -39,7 +39,6 @@ export function createNamespaceApi(
         | undefined,
     );
     const namespaceKey = makeNamespaceKey(parsed.keyArgs, keyBuilder);
-    const stampedeKey = `${namespaceName}:${namespaceKey}`;
 
     const cached = readFromLayers(deps, namespaceName, namespace, namespaceKey);
     if (cached) {
@@ -47,35 +46,38 @@ export function createNamespaceApi(
 
       if (cached.state === "stale") {
         deps.stats.stale(namespaceName);
-        void deps.stampede
-          .run(stampedeKey, async () => {
-            try {
-              const refreshed = await Promise.resolve(parsed.factory());
-              const effectiveSettings = resolveNamespaceSettings(
-                namespace,
-                deps.globalSettings,
-                parsed.options,
-              );
-              writeToLayers(
-                deps,
-                namespaceName,
-                namespaceKey,
-                refreshed,
-                effectiveSettings,
-              );
-              return refreshed;
-            } catch (error) {
-              deps.options.onRevalidateError?.(
-                namespaceName,
-                namespaceKey,
-                error,
-              );
-              throw error;
-            }
-          })
-          .catch(() => {
-            // handled by callback for observability; stale value remains available within SWR window
-          });
+        const stampedeKey = `${namespaceName}:${namespaceKey}`;
+        if (!deps.stampede.has(stampedeKey)) {
+          void deps.stampede
+            .run(stampedeKey, async () => {
+              try {
+                const refreshed = await Promise.resolve(parsed.factory());
+                const effectiveSettings = resolveNamespaceSettings(
+                  namespace,
+                  deps.globalSettings,
+                  parsed.options,
+                );
+                writeToLayers(
+                  deps,
+                  namespaceName,
+                  namespaceKey,
+                  refreshed,
+                  effectiveSettings,
+                );
+                return refreshed;
+              } catch (error) {
+                deps.options.onRevalidateError?.(
+                  namespaceName,
+                  namespaceKey,
+                  error,
+                );
+                throw error;
+              }
+            })
+            .catch(() => {
+              // handled by callback for observability; stale value remains available within SWR window
+            });
+        }
       }
 
       return cached.value;
@@ -83,6 +85,7 @@ export function createNamespaceApi(
 
     deps.stats.miss(namespaceName);
 
+    const stampedeKey = `${namespaceName}:${namespaceKey}`;
     return deps.stampede.run(stampedeKey, async () => {
       const effectiveSettings = resolveNamespaceSettings(
         namespace,

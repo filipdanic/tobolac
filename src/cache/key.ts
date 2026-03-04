@@ -16,6 +16,10 @@ export function makeNamespaceKey(args: unknown[], keyBuilder?: KeyBuilder): stri
     return SINGLETON_NAMESPACE_KEY;
   }
 
+  if (!keyBuilder && args.length === 1) {
+    return String(args[0]);
+  }
+
   return keyBuilder ? keyBuilder(...args) : args.map((arg) => String(arg)).join(":");
 }
 

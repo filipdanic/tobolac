@@ -110,7 +110,6 @@ export function writeToLayers<T>(
     createdAt: now,
     ttl: effectiveSettings.ttl,
     swr: effectiveSettings.swr,
-    lastAccessedAt: now,
   };
 
   layer1.set(namespaceKey, entry);

@@ -5,7 +5,6 @@ export interface CacheEntry {
   createdAt: number;
   ttl: number;
   swr: number;
-  lastAccessedAt: number;
 }
 
 export interface CacheDriver {
