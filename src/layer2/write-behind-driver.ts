@@ -40,6 +40,25 @@ export class WriteBehindCacheDriver implements CacheDriver {
     const batch = [...this.pendingWrites.values()];
     this.pendingWrites.clear();
 
+    if (this.inner.setMany) {
+      try {
+        this.inner.setMany(batch);
+      } catch {
+        for (let i = 0; i < batch.length; i += 1) {
+          this.pendingWrites.set(batch[i].scopedKey, batch[i]);
+        }
+        this.isFlushing = false;
+        this.scheduleFlush(10);
+        return;
+      }
+
+      this.isFlushing = false;
+      if (this.pendingWrites.size > 0) {
+        this.scheduleFlush(0);
+      }
+      return;
+    }
+
     for (let i = 0; i < batch.length; i += 1) {
       const write = batch[i];
       try {

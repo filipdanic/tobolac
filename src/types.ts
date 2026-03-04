@@ -10,6 +10,9 @@ export interface CacheEntry {
 export interface CacheDriver {
   get(namespace: string, key: string): CacheEntry | null;
   set(namespace: string, key: string, entry: CacheEntry): void;
+  setMany?: (
+    writes: ReadonlyArray<{ namespace: string; key: string; entry: CacheEntry }>,
+  ) => void;
   delete(namespace: string, key: string): boolean;
   deleteNamespace(namespace: string): void;
   clear(): void;

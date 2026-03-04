@@ -4,9 +4,17 @@ import type { CacheEntry } from "../types";
 export class MemoryCache {
   private readonly cache: LRUCache<string, CacheEntry>;
 
-  constructor(maxItems: number) {
+  constructor(
+    maxItems: number,
+    private readonly onLruEvict?: (key: string) => void,
+  ) {
     this.cache = new LRUCache<string, CacheEntry>({
       max: maxItems,
+      dispose: (_value, key, reason) => {
+        if (reason === "evict") {
+          this.onLruEvict?.(key);
+        }
+      },
     });
   }
 

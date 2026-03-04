@@ -52,13 +52,13 @@ export function readFromLayers<T>(
       layer1.delete(namespaceKey);
       deps.stats.eviction(namespaceName, "ttl");
       deps.options.onEvict?.(namespaceName, namespaceKey, "ttl");
-    } else {
-      return {
-        state,
-        value: deps.serializer.deserialize<T>(layer1Entry.value),
-        source: "layer1",
-      };
+      return null;
     }
+    return {
+      state,
+      value: deps.serializer.deserialize<T>(layer1Entry.value),
+      source: "layer1",
+    };
   }
 
   const l2Entry = deps.layer2.get(namespaceName, namespaceKey);
@@ -113,5 +113,8 @@ export function writeToLayers<T>(
   };
 
   layer1.set(namespaceKey, entry);
-  deps.layer2.set(namespaceName, namespaceKey, entry);
+  void new Promise((res) => {
+    deps.layer2.set(namespaceName, namespaceKey, entry);
+    res(0);
+  });
 }

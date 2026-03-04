@@ -1,6 +1,10 @@
 import { performance } from "node:perf_hooks";
 import { createCache, namespace } from "../dist/index.js";
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function parseIterations() {
   const index = process.argv.indexOf("--iterations");
   if (index !== -1) {
@@ -29,17 +33,10 @@ async function runScenario(
   iterations: number,
   task: (iteration: number) => Promise<void>,
 ) {
-  const warmup = Math.floor(iterations * 0.05);
-  let w = 0;
-  while (w < warmup) {
-    await task(w);
-    w += 1;
-  }
-
   const startedAt = performance.now();
   let i = 0;
-  while (i < iterations) {
-    await task(i);
+  while (i < iterations / 1000) {
+    await Promise.allSettled(Array.from({ length: 1000 }).map(() => task(i)));
     i += 1;
   }
   const elapsedMs = performance.now() - startedAt;
@@ -68,25 +65,33 @@ async function main() {
     },
     namespaces: {
       value: namespace<number, [key: string]>({
-        ttl: "5m",
+        ttl: "5s",
+        swr: "5s",
         layer1: { maxItems: 10_000 },
         factoryGetter: async () => {
           factoryCalls += 1;
+          await sleep(180);
           return Math.random();
         },
       }),
     },
   });
 
-  await runScenario("getOrSet; keyspace = 100", iterations, async () => {
-    await hitCache.value.getOrSet(`key-${Math.floor(Math.random() * 100)}`);
+  await runScenario("getOrSet; keyspace = 100_000", iterations, async () => {
+    await hitCache.value.getOrSet(`key-${Math.floor(Math.random() * 100_000)}`);
   });
   console.log(`factory calls: ${factoryCalls}`);
 
-  await hitCache.close();
+  // await hitCache.close();
+  return;
 }
 
-await main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => {
+    console.log("done");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

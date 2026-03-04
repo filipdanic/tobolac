@@ -34,6 +34,9 @@ interface TableSchemaRow {
 export class SqliteL2Driver implements CacheDriver {
   private readonly getStmt: SqliteStatement<SqliteRawRow | null | undefined>;
   private readonly setStmt: SqliteStatement;
+  private readonly beginStmt: SqliteStatement;
+  private readonly commitStmt: SqliteStatement;
+  private readonly rollbackStmt: SqliteStatement;
   private readonly deleteStmt: SqliteStatement;
   private readonly deleteNamespaceStmt: SqliteStatement;
   private readonly clearStmt: SqliteStatement;
@@ -48,6 +51,9 @@ export class SqliteL2Driver implements CacheDriver {
 
     this.getStmt = this.db.prepare<SqliteRawRow | null | undefined>(GET_SQL);
     this.setStmt = this.db.prepare(SET_SQL);
+    this.beginStmt = this.db.prepare("BEGIN");
+    this.commitStmt = this.db.prepare("COMMIT");
+    this.rollbackStmt = this.db.prepare("ROLLBACK");
     this.deleteStmt = this.db.prepare(DELETE_SQL);
     this.deleteNamespaceStmt = this.db.prepare(DELETE_NAMESPACE_SQL);
     this.clearStmt = this.db.prepare(CLEAR_SQL);
@@ -101,6 +107,34 @@ export class SqliteL2Driver implements CacheDriver {
       ttl: entry.ttl,
       swr: entry.swr,
     });
+  }
+
+  setMany(
+    writes: ReadonlyArray<{ namespace: string; key: string; entry: CacheEntry }>,
+  ): void {
+    if (writes.length === 0) {
+      return;
+    }
+
+    this.beginStmt.run();
+    try {
+      for (let i = 0; i < writes.length; i += 1) {
+        const write = writes[i];
+        this.setStmt.run({
+          namespace: write.namespace,
+          key: write.key,
+          value: write.entry.value,
+          created_at: write.entry.createdAt,
+          ttl: write.entry.ttl,
+          swr: write.entry.swr,
+        });
+      }
+
+      this.commitStmt.run();
+    } catch (error) {
+      this.rollbackStmt.run();
+      throw error;
+    }
   }
 
   delete(namespace: string, key: string): boolean {
