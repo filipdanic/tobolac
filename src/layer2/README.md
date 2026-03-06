@@ -8,9 +8,9 @@ This folder uses a shared SQLite driver with small runtime adapters.
   - `node-sqlite.ts`: Adapts `better-sqlite3` to the normalized adapter interface.
   - `bun-sqlite.ts`: Adapts Bun's SQLite API to the normalized adapter interface.
   - `sqlite.ts`: Normalized adapter interfaces (`SqliteConnection`, `SqliteStatement`) and row/blob normalization helpers.
-- `/driver:`
-  - `node-sqlite.ts`: Thin Node adapter with `createNodeSqliteConnection` called 
-  - `bun-sqlite.ts`: Thin Bun wrapper with `createBunSqliteConnection` called
+- `/driver`:
+  - `node-sqlite.ts`: Thin Node wrapper that creates a normalized connection via `createNodeSqliteConnection`.
+  - `bun-sqlite.ts`: Thin Bun wrapper that creates a normalized connection via `createBunSqliteConnection`.
 - `sqlite-driver.ts`: Single implementation of cache CRUD, pruning, counts, migration, and per-namespace LRU-cap enforcement.
 - `sqlite-sql.ts`: Centralized SQL statements used by the shared driver.
 
@@ -20,6 +20,8 @@ This folder uses a shared SQLite driver with small runtime adapters.
 2. Runtime wrapper (`bun-sqlite.ts` / `node-sqlite.ts`) builds the runtime adapter.
 3. `SqliteL2Driver` runs all cache operations through the normalized adapter.
 4. SQL is sourced from `sqlite-sql.ts`, so behavior stays consistent across runtimes.
+
+If no custom cache `driver` is passed to `createCache()`, this Layer 2 driver is wrapped by `WriteBehindCacheDriver` to batch writes.
 
 ## Storage model
 

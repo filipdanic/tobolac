@@ -12,11 +12,13 @@
 
 Via bun (primary):
 - `bun test` unit tests
+- `bun run test:integration` black-box integration tests
 - `bun run typecheck` runs strict TypeScript checks with no emit
 - `bun run build` builds distributable output with `tsup` into `dist/`.
 
 Via node:
 - `npm run test` runs the same tests in Node for runtime parity
+- `npm run test:integration` runs black-box integration tests against real SQLite
 
 ## Coding Style & Naming Conventions
 
