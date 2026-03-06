@@ -1,3 +1,6 @@
+/**
+ * @fileoverview Simple benchmark for quick  regression tests
+ */
 import { performance } from "node:perf_hooks";
 import { createCache, namespace } from "../dist/index.js";
 
@@ -82,7 +85,7 @@ async function main() {
   });
   console.log(`factory calls: ${factoryCalls}`);
 
-  // await hitCache.close();
+  await hitCache.close();
   return;
 }
 
