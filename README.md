@@ -19,7 +19,7 @@ Type-safe, two-layer cache for TypeScript with a small API and fast defaults. Wo
 ```ts
 import { createCache, namespace } from "tobolac";
 import type { Product, DashboardStats } from "../yourapp/services/types";
-import type { getProduct, getDashboardStats } from "../yourapp/services/getters";
+import { getProduct, getReport } from "../yourapp/services/getters";
 
 const cache = createCache({
   namespaces: {
@@ -35,6 +35,9 @@ const cache = createCache({
 // in your api handlers, background jobs, etc
 const user = await cache.products.getOrSet("b651113bf96a5e3543d7");
 const weeklyReport = await cache.reports.getOrSet("sales-total", 1771545600000, 1772150400000)
+
+// if you need to kill it and free up memory/cpu
+await cache.close();
 ```
 
 Pick your poison:
@@ -49,29 +52,32 @@ npm install tobolac
 ```ts
 import { createCache, namespace } from "tobolac";
 import type { Product, DashboardStats, User } from "../yourapp/services/types";
-import type { getProduct, getDashboardStats } from "../yourapp/services/getters";
+import { getProduct, getReport } from "../yourapp/services/getters";
 
 const cache = createCache({
   globalConfig: {
     ttl: '1m',
     swr: '5m',
-    layer1: { maxItems: 1_000 },
-    layer2:{ maxItems: 50_000 },
+    layer1: { maxItems: 5_000 },
     sqlite: {
-      path: './cache/sqlite/cache.db',
+      // persists with your disk across process restarts!
+      path: './cache/sqlite/cache.db', 
       pruneInterval: '1h',
     },
   },
   namespaces: {
-    users: namespace<User, [id: string]>(),
+     // you can override all global defaults
     products: namespace<Product, [id: string]>({
       ttl: '10m',
-      swr: '10m',
+      layer1: { maxItems: 10_000 },
       factoryGetter: async (id) => getProduct(id),
     }),
+    // you can have complex keys
     reports: namespace<DashboardStats, [name: string, from: number, to: number ]>({
       factoryGetter: async (name, from, to) => getReport(name, from, to),
     }),
+    // factoryGetter is optional, you can micromanage the get/set behavior yourself
+    users: namespace<User, [id: string]>(), 
   },
 });
 ```

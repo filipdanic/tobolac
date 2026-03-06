@@ -16,6 +16,13 @@ type ExternalProduct = Omit<Product, "status"> & {
   partner: string;
 };
 
+type SalesReport = {
+  type: "in-house" | "external";
+  from: number;
+  to: number;
+  totalRevenue: number;
+};
+
 const sleep = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
@@ -24,6 +31,20 @@ const isProductInHouse = (): boolean => Math.random() > 0.5;
 
 const cache = createCache({
   namespaces: {
+    salesReport: namespace<
+      SalesReport,
+      [type: SalesReport["type"], from: number, to: number]
+    >({
+      factoryGetter: async (type, from, to) => {
+        await sleep(2000);
+        return {
+          type,
+          from,
+          to,
+          totalRevenue: Math.floor(Math.random() * 100000),
+        };
+      },
+    }),
     inHouseProducts: namespace<Product, [id: string]>({
       factoryGetter: async (productId) => {
         await sleep(2000);
@@ -52,6 +73,7 @@ const cache = createCache({
 
 const server = Bun.serve({
   routes: {
+    // e.g curl localhost:3000/product/1
     "/product/:id": {
       GET: async (req) => {
         const productId = req.params.id as unknown as string;
@@ -63,6 +85,16 @@ const server = Bun.serve({
           const res = await cache.externalProducts.getOrSet(productId);
           return Response.json(res);
         }
+      },
+    },
+    // e.g curl localhost:3000/salesReport/external/0/10
+    "/salesReport/:type/:from/:to": {
+      GET: async (req) => {
+        const type = req.params.id as unknown as "in-house" | "external";
+        const from = Number.parseInt(req.params.from);
+        const to = Number.parseInt(req.params.to);
+        const res = await cache.salesReport.getOrSet(type, from, to);
+        return Response.json(res);
       },
     },
   },

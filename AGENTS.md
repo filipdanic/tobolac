@@ -24,7 +24,7 @@ Via node:
 - Keep modules focused and small; prefer clear boundaries (`cache`, `layer1`, `layer2`).
 - Use existing terminology consistently: `namespace`, `layer1`, `layer2`.
 - Follow repository filename patterns (kebab-case module files).
-- Avoid introducing runtime-specific behavior without isolating it in `src/l2/adapter/` or equivalent boundary.
+- Avoid introducing runtime-specific behavior without isolating it in `src/layer2/adapter/` or `src/layer2/driver/` boundaries.
 
 ## Testing Guidelines
 
@@ -38,3 +38,4 @@ Via node:
 
 - Node Layer 2 uses `better-sqlite3`.
 - Bun Layer 2 uses Bun SQLite adapter behavior; keep parameter/SQL compatibility in mind when modifying adapters.
+- By default, internal SQLite Layer 2 is wrapped in a write-behind driver; passing a custom `driver` bypasses that wrapper.
