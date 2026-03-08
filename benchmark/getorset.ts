@@ -67,7 +67,7 @@ async function main() {
       sqlite: { path: sqlitePath },
     },
     namespaces: {
-      value: namespace<number, [key: string]>({
+      testCache: namespace<number, [key: string]>({
         ttl: "5s",
         swr: "5s",
         layer1: { maxItems: 10_000 },
@@ -79,13 +79,19 @@ async function main() {
       }),
     },
   });
+  if (!hitCache.ok) {
+    throw new Error("Failed to setup the test env.");
+  }
+  const cache = hitCache.value;
 
   await runScenario("getOrSet; keyspace = 100_000", iterations, async () => {
-    await hitCache.value.getOrSet(`key-${Math.floor(Math.random() * 100_000)}`);
+    await cache.testCache.getOrSet(
+      `key-${Math.floor(Math.random() * 100_000)}`,
+    );
   });
   console.log(`factory calls: ${factoryCalls}`);
 
-  await hitCache.close();
+  await cache.close();
   return;
 }
 

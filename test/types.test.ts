@@ -1,11 +1,11 @@
 import { describe, expectTypeOf, it } from "vitest";
-import { createCache, namespace } from "../src";
+import { createCache, namespace, type CacheResult } from "../src";
 
 describe("type inference", () => {
   it("infers namespace value and args", async () => {
     const reportNamespace = namespace.type<{ id: string }>();
 
-    const cache = createCache({
+    const cacheResult = createCache({
       namespaces: {
         user: namespace<{ name: string }, [id: string]>({ ttl: "1m" }),
         reports: reportNamespace<[region: string]>({ ttl: "1m" }),
@@ -27,10 +27,15 @@ describe("type inference", () => {
         prune: () => 0,
         close: () => undefined,
         count: () => 0,
-        countByNamespace: () => 0
-      }
+        countByNamespace: () => 0,
+      },
     });
 
+    if (!cacheResult.ok) {
+      return;
+    }
+
+    const cache = cacheResult.value;
     const user = await cache.user.getOrSet("u1", () => ({ name: "Ada" }));
     const singleton = await cache.singleton.getOrSet(() => 1);
     const report = await cache.reports.getOrSet("eu", () => ({ id: "r1" }));
@@ -41,9 +46,9 @@ describe("type inference", () => {
       cache.user.getOrSet("u1");
     }
 
-    expectTypeOf(user).toEqualTypeOf<{ name: string }>();
-    expectTypeOf(singleton).toEqualTypeOf<number>();
-    expectTypeOf(report).toEqualTypeOf<{ id: string }>();
-    expectTypeOf(userFromGetter).toEqualTypeOf<{ id: string }>();
+    expectTypeOf(user).toEqualTypeOf<CacheResult<{ name: string }>>();
+    expectTypeOf(singleton).toEqualTypeOf<CacheResult<number>>();
+    expectTypeOf(report).toEqualTypeOf<CacheResult<{ id: string }>>();
+    expectTypeOf(userFromGetter).toEqualTypeOf<CacheResult<{ id: string }>>();
   });
 });

@@ -1,5 +1,6 @@
+import { z } from "zod";
 import { describe, expect, it, vi } from "vitest";
-import { createCache, namespace } from "../src";
+import { createCache, type CacheResult, namespace } from "../src";
 import { InMemoryDriver } from "./helpers/in-memory-driver";
 
 async function flushMicrotasks(times: number = 3): Promise<void> {
@@ -8,44 +9,56 @@ async function flushMicrotasks(times: number = 3): Promise<void> {
   }
 }
 
+function expectOk<T>(result: CacheResult<T>): T {
+  expect(result.ok).toBe(true);
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  return result.value;
+}
+
 describe("cache core behavior", () => {
   it("runs getOrSet miss->hit cycle", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     const factory = vi.fn(async () => ({ id: "u1" }));
 
     const first = await cache.user.getOrSet("u1", factory);
     const second = await cache.user.getOrSet("u1", factory);
 
-    expect(first).toEqual({ id: "u1" });
-    expect(second).toEqual({ id: "u1" });
+    expect(first).toEqual({ ok: true, value: { id: "u1" } });
+    expect(second).toEqual({ ok: true, value: { id: "u1" } });
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
   it("uses namespace factoryGetter when getOrSet factory is omitted", async () => {
     const driver = new InMemoryDriver();
     const factoryGetter = vi.fn(async (id: string) => ({ id }));
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({
-          ttl: "1m",
-          factoryGetter,
-        }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({
+            ttl: "1m",
+            factoryGetter,
+          }),
+        },
+      }),
+    );
 
     const first = await cache.user.getOrSet("u1");
     const second = await cache.user.getOrSet("u1");
 
-    expect(first).toEqual({ id: "u1" });
-    expect(second).toEqual({ id: "u1" });
+    expect(first).toEqual({ ok: true, value: { id: "u1" } });
+    expect(second).toEqual({ ok: true, value: { id: "u1" } });
     expect(factoryGetter).toHaveBeenCalledTimes(1);
     expect(factoryGetter).toHaveBeenCalledWith("u1");
   });
@@ -54,82 +67,114 @@ describe("cache core behavior", () => {
     const driver = new InMemoryDriver();
     const factoryGetter = vi.fn(async () => ({ id: "from-default" }));
     const callFactory = vi.fn(async () => ({ id: "from-call" }));
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({
-          ttl: "1m",
-          factoryGetter,
-        }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({
+            ttl: "1m",
+            factoryGetter,
+          }),
+        },
+      }),
+    );
 
     const value = await cache.user.getOrSet("u1", callFactory);
 
-    expect(value).toEqual({ id: "from-call" });
+    expect(value).toEqual({ ok: true, value: { id: "from-call" } });
     expect(callFactory).toHaveBeenCalledTimes(1);
     expect(factoryGetter).not.toHaveBeenCalled();
   });
 
-  it("throws when no call factory or namespace factoryGetter is available", async () => {
+  it("returns invalid-args result when no factory is available", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     await expect(
       (cache.user.getOrSet as (...params: unknown[]) => Promise<unknown>)("u1"),
-    ).rejects.toThrow(
-      "getOrSet requires a factory function or namespace factoryGetter",
-    );
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        kind: "invalid-args",
+        message: "getOrSet requires a factory function or namespace factoryGetter",
+      },
+    });
   });
 
   it("supports set/get/delete", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-      },
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
+
+    await expect(cache.user.set("u1", { id: "u1" })).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
+    await expect(cache.user.get("u1")).resolves.toEqual({
+      ok: true,
+      value: { id: "u1" },
     });
 
-    await cache.user.set("u1", { id: "u1" });
-    await expect(cache.user.get("u1")).resolves.toEqual({ id: "u1" });
-
-    await cache.user.delete("u1");
-    await expect(cache.user.get("u1")).resolves.toBeNull();
+    await expect(cache.user.delete("u1")).resolves.toEqual({
+      ok: true,
+      value: true,
+    });
+    await expect(cache.user.get("u1")).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
   });
 
   it("clears only one namespace on namespace.clear", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-        post: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+          post: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     await cache.user.set("u1", { id: "u1" });
     await cache.post.set("p1", { id: "p1" });
 
-    await cache.user.clear();
+    await expect(cache.user.clear()).resolves.toEqual({ ok: true, value: undefined });
 
-    await expect(cache.user.get("u1")).resolves.toBeNull();
-    await expect(cache.post.get("p1")).resolves.toEqual({ id: "p1" });
+    await expect(cache.user.get("u1")).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
+    await expect(cache.post.get("p1")).resolves.toEqual({
+      ok: true,
+      value: { id: "p1" },
+    });
   });
 
   it("deduplicates concurrent miss factories", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        value: namespace<number, [key: string]>({ ttl: "1m" }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          value: namespace<number, [key: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     const factory = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -142,7 +187,11 @@ describe("cache core behavior", () => {
       cache.value.getOrSet("k1", factory),
     ]);
 
-    expect(results).toEqual([42, 42, 42]);
+    expect(results).toEqual([
+      { ok: true, value: 42 },
+      { ok: true, value: 42 },
+      { ok: true, value: 42 },
+    ]);
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
@@ -150,12 +199,14 @@ describe("cache core behavior", () => {
     vi.useFakeTimers();
     try {
       const driver = new InMemoryDriver();
-      const cache = createCache({
-        driver,
-        namespaces: {
-          value: namespace<number, [key: string]>({ ttl: "10ms", swr: "1s" }),
-        },
-      });
+      const cache = expectOk(
+        createCache({
+          driver,
+          namespaces: {
+            value: namespace<number, [key: string]>({ ttl: "10ms", swr: "1s" }),
+          },
+        }),
+      );
 
       await cache.value.set("k1", 1);
       vi.advanceTimersByTime(20);
@@ -164,9 +215,9 @@ describe("cache core behavior", () => {
       const staleValue = await cache.value.getOrSet("k1", factory);
       await flushMicrotasks();
 
-      expect(staleValue).toBe(1);
+      expect(staleValue).toEqual({ ok: true, value: 1 });
       expect(factory).toHaveBeenCalledTimes(1);
-      await expect(cache.value.get("k1")).resolves.toBe(2);
+      await expect(cache.value.get("k1")).resolves.toEqual({ ok: true, value: 2 });
     } finally {
       vi.useRealTimers();
     }
@@ -177,16 +228,18 @@ describe("cache core behavior", () => {
     try {
       const onRevalidateError = vi.fn();
       const driver = new InMemoryDriver();
-      const cache = createCache({
-        driver,
-        onRevalidateError,
-        namespaces: {
-          value: namespace<number, [key: string]>({
-            ttl: "10ms",
-            swr: "100ms",
-          }),
-        },
-      });
+      const cache = expectOk(
+        createCache({
+          driver,
+          onRevalidateError,
+          namespaces: {
+            value: namespace<number, [key: string]>({
+              ttl: "10ms",
+              swr: "100ms",
+            }),
+          },
+        }),
+      );
 
       await cache.value.set("k1", 1);
       vi.advanceTimersByTime(20);
@@ -195,68 +248,93 @@ describe("cache core behavior", () => {
         cache.value.getOrSet("k1", async () => {
           throw new Error("boom");
         }),
-      ).resolves.toBe(1);
+      ).resolves.toEqual({ ok: true, value: 1 });
 
       await flushMicrotasks();
       expect(onRevalidateError).toHaveBeenCalledTimes(1);
 
-      await expect(cache.value.get("k1")).resolves.toBe(1);
+      await expect(cache.value.get("k1")).resolves.toEqual({ ok: true, value: 1 });
       vi.advanceTimersByTime(200);
-      await expect(cache.value.get("k1")).resolves.toBeNull();
+      await expect(cache.value.get("k1")).resolves.toEqual({
+        ok: true,
+        value: undefined,
+      });
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("invalid schema data in L2 triggers callback and refetch", async () => {
+  it("returns validation error result for invalid zod schema data in cache", async () => {
     const driver = new InMemoryDriver();
-    const onValidationError = vi.fn();
-    const schema = {
-      parse(v: unknown) {
-        if (
-          !v ||
-          typeof v !== "object" ||
-          typeof (v as { id?: unknown }).id !== "number"
-        ) {
-          throw new Error("invalid");
-        }
-        return v as { id: number };
-      },
-    };
+    const schema = z.object({ id: z.number() });
 
-    const cacheA = createCache({
-      driver,
-      namespaces: {
-        item: namespace<{ id: number }, [id: string]>({ ttl: "1m" }),
-      },
-    });
+    const cacheA = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          item: namespace<{ id: number }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     await cacheA.item.set("a", { id: "bad" } as unknown as { id: number });
 
-    const cacheB = createCache({
-      driver,
-      onValidationError,
-      namespaces: {
-        item: namespace<{ id: number }, [id: string]>({ ttl: "1m", schema }),
+    const cacheB = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          item: namespace.schema(schema)<[id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
+
+    const value = await cacheB.item.get("a");
+    expect(value.ok).toBe(false);
+    if (!value.ok) {
+      expect(value.error.kind).toBe("validation");
+      expect(value.error.message).toContain("Expected number");
+    }
+
+    await expect(cacheB.item.get("a")).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
+  });
+
+  it("returns factory error result instead of throwing", async () => {
+    const driver = new InMemoryDriver();
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          value: namespace<number, [key: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
+
+    await expect(
+      cache.value.getOrSet("k1", async () => {
+        throw new Error("api down");
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        kind: "factory",
+        message: "api down",
       },
     });
-
-    const factory = vi.fn(async () => ({ id: 1 }));
-    const value = await cacheB.item.getOrSet("a", factory);
-
-    expect(value).toEqual({ id: 1 });
-    expect(factory).toHaveBeenCalledTimes(1);
-    expect(onValidationError).toHaveBeenCalledTimes(1);
   });
 
   it("tracks stats and reset", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     await cache.user.get("u1");
     await cache.user.getOrSet("u1", async () => ({ id: "u1" }));
@@ -274,16 +352,18 @@ describe("cache core behavior", () => {
   it("fires L1 LRU eviction callback when maxItems is exceeded", async () => {
     const onEvict = vi.fn();
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      onEvict,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({
-          ttl: "1m",
-          layer1: { maxItems: 1 },
-        }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        onEvict,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({
+            ttl: "1m",
+            layer1: { maxItems: 1 },
+          }),
+        },
+      }),
+    );
 
     await cache.user.set("u1", { id: "u1" });
     await cache.user.set("u2", { id: "u2" });
@@ -293,39 +373,66 @@ describe("cache core behavior", () => {
 
   it("isolates Layer 2 keys by namespace when key args are identical", async () => {
     const driver = new InMemoryDriver();
-    const cache = createCache({
-      driver,
-      namespaces: {
-        user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-        post: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
-      },
-    });
+    const cache = expectOk(
+      createCache({
+        driver,
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+          post: namespace<{ id: string }, [id: string]>({ ttl: "1m" }),
+        },
+      }),
+    );
 
     await cache.user.set("same", { id: "u1" });
     await cache.post.set("same", { id: "p1" });
 
-    await expect(cache.user.get("same")).resolves.toEqual({ id: "u1" });
-    await expect(cache.post.get("same")).resolves.toEqual({ id: "p1" });
+    await expect(cache.user.get("same")).resolves.toEqual({
+      ok: true,
+      value: { id: "u1" },
+    });
+    await expect(cache.post.get("same")).resolves.toEqual({
+      ok: true,
+      value: { id: "p1" },
+    });
   });
 
   it("uses globalConfig defaults for namespace layer settings", async () => {
     const onEvict = vi.fn();
     const driver = new InMemoryDriver();
+    const cache = expectOk(
+      createCache({
+        driver,
+        onEvict,
+        globalConfig: {
+          ttl: "1m",
+          layer1: { maxItems: 1 },
+        },
+        namespaces: {
+          user: namespace<{ id: string }, [id: string]>(),
+        },
+      }),
+    );
+
+    await cache.user.set("u1", { id: "u1" });
+    await cache.user.set("u2", { id: "u2" });
+
+    expect(onEvict).toHaveBeenCalledWith("user", "u1", "lru");
+  });
+
+  it("returns config error result when construction fails", () => {
     const cache = createCache({
-      driver,
-      onEvict,
       globalConfig: {
-        ttl: "1m",
-        layer1: { maxItems: 1 },
+        ttl: "bad" as never,
       },
       namespaces: {
         user: namespace<{ id: string }, [id: string]>(),
       },
     });
 
-    await cache.user.set("u1", { id: "u1" });
-    await cache.user.set("u2", { id: "u2" });
-
-    expect(onEvict).toHaveBeenCalledWith("user", "u1", "lru");
+    expect(cache.ok).toBe(false);
+    if (!cache.ok) {
+      expect(cache.error.kind).toBe("config");
+      expect(cache.error.message).toContain("Invalid duration format");
+    }
   });
 });

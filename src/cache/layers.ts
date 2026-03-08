@@ -1,5 +1,6 @@
 import { parseDuration } from "../duration";
 import { getEntryState } from "../swr";
+import { toMessage } from "../result";
 import type {
   CacheEntry,
   NamespaceDefinition,
@@ -29,21 +30,38 @@ export function resolveNamespaceSettings(
 }
 
 function getNamespaceLayer1(deps: CacheRuntimeDeps, namespaceName: string) {
-  const layer1 = deps.layer1ByNamespace.get(namespaceName);
-  if (!layer1) {
-    throw new Error(`Missing Layer 1 cache for namespace "${namespaceName}"`);
-  }
-  return layer1;
+  return deps.layer1ByNamespace.get(namespaceName) ?? null;
 }
+
+export type LayerReadResult<T> =
+  | { status: "hit"; state: "fresh" | "stale"; value: T; source: "layer1" | "layer2" }
+  | { status: "miss" }
+  | {
+      status: "error";
+      error: {
+        kind: "validation" | "runtime";
+        message: string;
+        cause?: unknown;
+      };
+    };
 
 export function readFromLayers<T>(
   deps: CacheRuntimeDeps,
   namespaceName: string,
   namespace: NamespaceDefinition<T, unknown[]>,
   namespaceKey: string,
-): { state: "fresh" | "stale"; value: T; source: "layer1" | "layer2" } | null {
+): LayerReadResult<T> {
   const now = Date.now();
   const layer1 = getNamespaceLayer1(deps, namespaceName);
+  if (!layer1) {
+    return {
+      status: "error",
+      error: {
+        kind: "runtime",
+        message: `Missing Layer 1 cache for namespace "${namespaceName}"`,
+      },
+    };
+  }
 
   const layer1Entry = layer1.get(namespaceKey);
   if (layer1Entry) {
@@ -52,9 +70,10 @@ export function readFromLayers<T>(
       layer1.delete(namespaceKey);
       deps.stats.eviction(namespaceName, "ttl");
       deps.options.onEvict?.(namespaceName, namespaceKey, "ttl");
-      return null;
+      return { status: "miss" };
     }
     return {
+      status: "hit",
       state,
       value: deps.serializer.deserialize<T>(layer1Entry.value),
       source: "layer1",
@@ -63,7 +82,7 @@ export function readFromLayers<T>(
 
   const l2Entry = deps.layer2.get(namespaceName, namespaceKey);
   if (!l2Entry) {
-    return null;
+    return { status: "miss" };
   }
 
   const state = getEntryState(l2Entry, now);
@@ -71,7 +90,7 @@ export function readFromLayers<T>(
     deps.layer2.delete(namespaceName, namespaceKey);
     deps.stats.eviction(namespaceName, "ttl");
     deps.options.onEvict?.(namespaceName, namespaceKey, "ttl");
-    return null;
+    return { status: "miss" };
   }
 
   const deserialized = deps.serializer.deserialize<unknown>(l2Entry.value);
@@ -81,15 +100,23 @@ export function readFromLayers<T>(
     try {
       validated = namespace.options.schema.parse(deserialized);
     } catch (error) {
-      deps.options.onValidationError?.(namespaceName, namespaceKey, error);
       deps.layer2.delete(namespaceName, namespaceKey);
-      return null;
+      layer1.delete(namespaceKey);
+      return {
+        status: "error",
+        error: {
+          kind: "validation",
+          message: toMessage(error, "Schema validation failed"),
+          cause: error,
+        },
+      };
     }
   }
 
   layer1.set(namespaceKey, l2Entry);
 
   return {
+    status: "hit",
     state,
     value: validated as T,
     source: "layer2",
@@ -105,6 +132,9 @@ export function writeToLayers<T>(
 ): void {
   const now = Date.now();
   const layer1 = getNamespaceLayer1(deps, namespaceName);
+  if (!layer1) {
+    return;
+  }
   const entry: CacheEntry = {
     value: deps.serializer.serialize(value),
     createdAt: now,

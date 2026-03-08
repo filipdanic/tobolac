@@ -1,11 +1,11 @@
 # tobolac
 
-Type-safe, two-layer cache for TypeScript with a small API and fast defaults. Works with Bun and Node out of the box.
+Type-safe, Zod-compatible two-layer cache for TypeScript with a small API and fast defaults. Works with Bun and Node out of the box. Comes with:
 
-- **Layer 1:** in-memory LRU (hot reads)
-- **Layer 2:** local SQLite (durable process restarts)
-- **Typed namespaces:** everything inferred end-to-end
-- **SWR:** stale-while-revalidate
+- **Layer 1 cache:** in-memory LRU (hot reads)
+- **Layer 2 cache:** local SQLite (durable process restarts)
+- **Typed namespaces:** everything inferred end-to-end; never throw, all responses are a Rust-like `Result` type
+- **SWR:** stale-while-revalidate supported
 - **Stampede protection:** hot keys will never hammer your API
 
 ## Why it feels good
@@ -32,12 +32,25 @@ const cache = createCache({
   },
 });
 
-// in your api handlers, background jobs, etc
-const user = await cache.products.getOrSet("b651113bf96a5e3543d7");
-const weeklyReport = await cache.reports.getOrSet("sales-total", 1771545600000, 1772150400000)
+if (!cache.ok) {
+  // something went wrong with setting up your cache
+  console.error(cache.error.message);
+}
+
+const appCache = cache.value;
+
+const userResult = await appCache.products.getOrSet("b651113bf96a5e3543d7");
+if (!userResult.ok) {
+  console.error(userResult.error.message);
+}
+
+const weeklyReport = await appCache.reports.getOrSet("sales-total", 1771545600000, 1772150400000);
+if (!weeklyReport.ok) {
+  console.error(weeklyReport.error.message);
+}
 
 // if you need to kill it and free up memory/cpu
-await cache.close();
+await appCache.close();
 ```
 
 Pick your poison:
@@ -80,4 +93,47 @@ const cache = createCache({
     users: namespace<User, [id: string]>(), 
   },
 });
+
+if (!cache.ok) {
+  throw new Error(cache.error.message);
+}
+
+await cache.value.users.get("42");
+```
+
+## Result API and schema validation
+
+Every public API returns a `CacheResult<T>` instead of throwing:
+
+- `{ ok: true, value }` for success
+- `{ ok: false, error }` for failure
+
+`get(...)` returns `value: undefined` on cache miss.
+
+For schema-enabled namespaces, validation failures return:
+
+- `error.kind = "validation"`
+- `error.message` with the validator message (for example from zod)
+
+Example with zod:
+
+```ts
+import { z } from "zod";
+import { createCache, namespace } from "tobolac";
+
+const cache = createCache({
+  namespaces: {
+    product: namespace.schema(z.object({ id: z.number() }))<[id: string]>(),
+  },
+});
+
+if (cache.ok) {
+  const result = await cache.value.product.get("p1");
+  if (!result.ok) {
+    console.error(result.error.kind, result.error.message);
+  }
+}
+```
+
+`onValidationError` is deprecated and kept only for backwards compatibility.
 ```

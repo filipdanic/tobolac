@@ -54,6 +54,25 @@ export interface NamespaceOptions<T, Args extends unknown[] = unknown[]> extends
   factoryGetter?: (...args: Args) => T | Promise<T>;
 }
 
+export type CacheErrorKind =
+  | "validation"
+  | "factory"
+  | "invalid-args"
+  | "runtime"
+  | "config";
+
+export interface CacheError {
+  kind: CacheErrorKind;
+  message: string;
+  cause?: unknown;
+  namespace?: string;
+  key?: string;
+}
+
+export type CacheOk<T> = { ok: true; value: T };
+export type CacheErr = { ok: false; error: CacheError };
+export type CacheResult<T> = CacheOk<T> | CacheErr;
+
 export interface NamespaceDefinition<
   T,
   Args extends unknown[] = [],
@@ -68,22 +87,22 @@ export type NamespacesShape = Record<string, NamespaceDefinition<any, any[], boo
 type Factory<T> = () => T | Promise<T>;
 
 type GetOrSetWithFactoryGetter<T, Args extends unknown[]> = {
-  (...params: [...args: Args, options?: OperationOptions]): Promise<T>;
-  (...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]): Promise<T>;
+  (...params: [...args: Args, options?: OperationOptions]): Promise<CacheResult<T>>;
+  (...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]): Promise<CacheResult<T>>;
 };
 
 type GetOrSetWithoutFactoryGetter<T, Args extends unknown[]> = (
   ...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]
-) => Promise<T>;
+) => Promise<CacheResult<T>>;
 
 export interface NamespaceApi<T, Args extends unknown[], HasFactoryGetter extends boolean = false> {
   getOrSet: HasFactoryGetter extends true
     ? GetOrSetWithFactoryGetter<T, Args>
     : GetOrSetWithoutFactoryGetter<T, Args>;
-  get: (...args: Args) => Promise<T | null>;
-  set: (...params: [...args: Args, value: T, options?: OperationOptions]) => Promise<void>;
-  delete: (...args: Args) => Promise<boolean>;
-  clear: () => Promise<void>;
+  get: (...args: Args) => Promise<CacheResult<T | undefined>>;
+  set: (...params: [...args: Args, value: T, options?: OperationOptions]) => Promise<CacheResult<undefined>>;
+  delete: (...args: Args) => Promise<CacheResult<boolean>>;
+  clear: () => Promise<CacheResult<undefined>>;
   stats: StatsAccessor;
 }
 
@@ -92,9 +111,9 @@ export type CacheApi<S extends NamespacesShape> = {
     ? NamespaceApi<T, A, H>
     : never;
 } & {
-  clear: () => Promise<void>;
+  clear: () => Promise<CacheResult<undefined>>;
   stats: StatsAccessor;
-  close: () => Promise<void>;
+  close: () => Promise<CacheResult<undefined>>;
 };
 
 export interface GlobalConfig extends OperationOptions {
@@ -110,6 +129,7 @@ export interface CacheOptions<S extends NamespacesShape> {
   globalConfig?: GlobalConfig;
   serializer?: "json";
   onRevalidateError?: (namespaceName: string, key: string, error: unknown) => void;
+  /** @deprecated Use CacheResult errors from API calls instead. */
   onValidationError?: (namespaceName: string, key: string, error: unknown) => void;
   onEvict?: (namespaceName: string, key: string, reason: EvictionReason) => void;
   driver?: CacheDriver;
