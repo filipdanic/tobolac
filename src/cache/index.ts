@@ -1,7 +1,16 @@
 import { createGlobalApi, createNamespaceApi } from "./builders";
-import { err, ok, toMessage } from "../result";
-import { createRuntimeDeps, resolveGlobalSettings, resolveRuntimeSettings } from "./runtime";
-import type { CacheApi, CacheOptions, CacheResult, NamespacesShape } from "../types";
+import { err, ok, toMessage } from "../utils/result";
+import {
+  createRuntimeDeps,
+  resolveGlobalSettings,
+  resolveRuntimeSettings,
+} from "./runtime";
+import type {
+  CacheApi,
+  CacheOptions,
+  CacheResult,
+  NamespacesShape,
+} from "../types";
 import type { AnyNamespace } from "./internal-types";
 
 export function createCache<S extends NamespacesShape>(

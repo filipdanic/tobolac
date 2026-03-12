@@ -1,4 +1,4 @@
-import type { CacheErr, CacheErrorKind, CacheResult } from "./types";
+import type { CacheErr, CacheErrorKind, CacheResult } from "../types";
 
 export function ok<T>(value: T): CacheResult<T> {
   return { ok: true, value };

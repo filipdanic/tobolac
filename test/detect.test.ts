@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectRuntime } from "../src/detect";
+import { detectRuntime } from "../src/utils/detect";
 
 describe("detectRuntime", () => {
   it("detects the active runtime", () => {

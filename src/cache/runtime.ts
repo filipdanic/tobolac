@@ -1,12 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { detectRuntime } from "../detect";
-import { parseDuration } from "../duration";
+import { detectRuntime } from "../utils/detect";
+import { parseDuration } from "../utils/duration";
 import { MemoryCache } from "../layer1/memory";
 import { BunSqliteDriver } from "../layer2/driver/bun-sqlite";
 import { NodeSqliteDriver } from "../layer2/driver/node-sqlite";
 import { WriteBehindCacheDriver } from "../layer2/write-behind-driver";
-import { jsonSerializer } from "../serializer";
+import { jsonSerializer } from "../utils/serializer";
 import { StampedeGuard } from "../stampede";
 import { StatsTracker } from "../stats";
 import type { CacheDriver, CacheOptions, NamespacesShape } from "../types";

@@ -1,5 +1,5 @@
 import { MemoryCache } from "../layer1/memory";
-import { jsonSerializer } from "../serializer";
+import { jsonSerializer } from "../utils/serializer";
 import { StampedeGuard } from "../stampede";
 import { StatsTracker } from "../stats";
 import type {

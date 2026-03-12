@@ -9,7 +9,7 @@ import {
   resolveNamespaceSettings,
   writeToLayers,
 } from "./layers";
-import { err, ok, toMessage } from "../result";
+import { err, ok, toMessage } from "../utils/result";
 import type { AnyNamespace, CacheRuntimeDeps } from "./internal-types";
 
 export function createNamespaceApi(
@@ -22,7 +22,12 @@ export function createNamespaceApi(
   const get = async (...args: unknown[]) => {
     try {
       const namespaceKey = makeNamespaceKey(args, keyBuilder);
-      const cached = readFromLayers(deps, namespaceName, namespace, namespaceKey);
+      const cached = readFromLayers(
+        deps,
+        namespaceName,
+        namespace,
+        namespaceKey,
+      );
 
       if (cached.status === "error") {
         return err(cached.error.kind, cached.error.message, {
@@ -57,7 +62,12 @@ export function createNamespaceApi(
       );
       const namespaceKey = makeNamespaceKey(parsed.keyArgs, keyBuilder);
 
-      const cached = readFromLayers(deps, namespaceName, namespace, namespaceKey);
+      const cached = readFromLayers(
+        deps,
+        namespaceName,
+        namespace,
+        namespaceKey,
+      );
       if (cached.status === "error") {
         return err(cached.error.kind, cached.error.message, {
           cause: cached.error.cause,
@@ -165,7 +175,9 @@ export function createNamespaceApi(
       return ok(undefined);
     } catch (error) {
       const message = toMessage(error, "Cache set failed");
-      const kind = message.includes("set requires") ? "invalid-args" : "runtime";
+      const kind = message.includes("set requires")
+        ? "invalid-args"
+        : "runtime";
       return err(kind, message, {
         cause: error,
         namespace: namespaceName,

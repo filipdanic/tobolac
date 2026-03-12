@@ -1,6 +1,6 @@
-import { parseDuration } from "../duration";
+import { parseDuration } from "../utils/duration";
 import { getEntryState } from "../swr";
-import { toMessage } from "../result";
+import { toMessage } from "../utils/result";
 import type {
   CacheEntry,
   NamespaceDefinition,
@@ -34,7 +34,12 @@ function getNamespaceLayer1(deps: CacheRuntimeDeps, namespaceName: string) {
 }
 
 export type LayerReadResult<T> =
-  | { status: "hit"; state: "fresh" | "stale"; value: T; source: "layer1" | "layer2" }
+  | {
+      status: "hit";
+      state: "fresh" | "stale";
+      value: T;
+      source: "layer1" | "layer2";
+    }
   | { status: "miss" }
   | {
       status: "error";
