@@ -1,4 +1,4 @@
-import type { Duration } from "./types";
+import type { Duration } from "../types";
 
 const DURATION_RE = /^(\d+)(ms|s|m|h|d)$/;
 

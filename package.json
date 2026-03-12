@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Multi-layer type-safe TypeScript cache library",
   "license": "MIT",
+  "repository": "github:filipdanic/tobolac",
+  "keywords": ["cache", "lru", "sqlite", "typescript", "zod", "stampede", "swr"],
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
