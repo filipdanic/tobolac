@@ -56,8 +56,13 @@ await appCache.close();
 Pick your poison:
 
 ```bash
+# if using bun
 bun install tobolac
-npm install tobolac
+
+# if using nodejs/npm
+npm install tobolac better-sqlite3
+# or nodejs/yarn
+yarn install tobolac better-sqlite3
 ```
 
 ## Advanced
