@@ -11,7 +11,11 @@ export interface CacheDriver {
   get(namespace: string, key: string): CacheEntry | null;
   set(namespace: string, key: string, entry: CacheEntry): void;
   setMany?: (
-    writes: ReadonlyArray<{ namespace: string; key: string; entry: CacheEntry }>,
+    writes: ReadonlyArray<{
+      namespace: string;
+      key: string;
+      entry: CacheEntry;
+    }>,
   ) => void;
   delete(namespace: string, key: string): boolean;
   deleteNamespace(namespace: string): void;
@@ -47,7 +51,10 @@ export interface Layer1Options {
   maxItems?: number;
 }
 
-export interface NamespaceOptions<T, Args extends unknown[] = unknown[]> extends OperationOptions {
+export interface NamespaceOptions<
+  T,
+  Args extends unknown[] = unknown[],
+> extends OperationOptions {
   layer1?: Layer1Options;
   schema?: { parse(value: unknown): T };
   key?: (...args: Args) => string;
@@ -82,25 +89,38 @@ export interface NamespaceDefinition<
   readonly options: NamespaceOptions<T, Args>;
 }
 
-export type NamespacesShape = Record<string, NamespaceDefinition<any, any[], boolean>>;
+export type NamespacesShape = Record<
+  string,
+  NamespaceDefinition<any, any[], boolean>
+>;
 
 type Factory<T> = () => T | Promise<T>;
 
 type GetOrSetWithFactoryGetter<T, Args extends unknown[]> = {
-  (...params: [...args: Args, options?: OperationOptions]): Promise<CacheResult<T>>;
-  (...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]): Promise<CacheResult<T>>;
+  (
+    ...params: [...args: Args, options?: OperationOptions]
+  ): Promise<CacheResult<T>>;
+  (
+    ...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]
+  ): Promise<CacheResult<T>>;
 };
 
 type GetOrSetWithoutFactoryGetter<T, Args extends unknown[]> = (
   ...params: [...args: Args, factory: Factory<T>, options?: OperationOptions]
 ) => Promise<CacheResult<T>>;
 
-export interface NamespaceApi<T, Args extends unknown[], HasFactoryGetter extends boolean = false> {
+export interface NamespaceApi<
+  T,
+  Args extends unknown[],
+  HasFactoryGetter extends boolean = false,
+> {
   getOrSet: HasFactoryGetter extends true
     ? GetOrSetWithFactoryGetter<T, Args>
     : GetOrSetWithoutFactoryGetter<T, Args>;
   get: (...args: Args) => Promise<CacheResult<T | undefined>>;
-  set: (...params: [...args: Args, value: T, options?: OperationOptions]) => Promise<CacheResult<undefined>>;
+  set: (
+    ...params: [...args: Args, value: T, options?: OperationOptions]
+  ) => Promise<CacheResult<undefined>>;
   delete: (...args: Args) => Promise<CacheResult<boolean>>;
   clear: () => Promise<CacheResult<undefined>>;
   stats: StatsAccessor;
@@ -128,9 +148,15 @@ export interface CacheOptions<S extends NamespacesShape> {
   namespaces: S;
   globalConfig?: GlobalConfig;
   serializer?: "json";
-  onRevalidateError?: (namespaceName: string, key: string, error: unknown) => void;
-  /** @deprecated Use CacheResult errors from API calls instead. */
-  onValidationError?: (namespaceName: string, key: string, error: unknown) => void;
-  onEvict?: (namespaceName: string, key: string, reason: EvictionReason) => void;
+  onRevalidateError?: (
+    namespaceName: string,
+    key: string,
+    error: unknown,
+  ) => void;
+  onEvict?: (
+    namespaceName: string,
+    key: string,
+    reason: EvictionReason,
+  ) => void;
   driver?: CacheDriver;
 }

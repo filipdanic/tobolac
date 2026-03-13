@@ -138,7 +138,3 @@ if (cache.ok) {
     console.error(result.error.kind, result.error.message);
   }
 }
-```
-
-`onValidationError` is deprecated and kept only for backwards compatibility.
-```

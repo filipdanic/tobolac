@@ -3,3 +3,4 @@ dist
 coverage
 .cache
 .DS_Store
+.npmrc
