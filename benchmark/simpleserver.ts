@@ -1,6 +1,9 @@
 /**
  * @fileoverview A simple Bun server, for testing the library UX/DX and
  * custom scenarios during development.
+ * @example
+ * Run simply with `bun benchmark/simpleserver.ts` and then run
+ * curl localhost:3000/product/1 twice, the 1st one should be slow, the 2nd instant
  */
 import { createCache, namespace } from "../dist/index.js";
 
@@ -27,9 +30,9 @@ const sleep = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-const isProductInHouse = (): boolean => Math.random() > 0.5;
+const isProductInHouse = (id: string): boolean => Number(id) % 2 === 0;
 
-const cache = createCache({
+const cacheSetup = createCache({
   namespaces: {
     salesReport: namespace<
       SalesReport,
@@ -58,7 +61,7 @@ const cache = createCache({
     }),
     externalProducts: namespace<ExternalProduct, [id: string]>({
       factoryGetter: async (productId) => {
-        await sleep(220);
+        await sleep(2000);
         return {
           id: productId,
           status: "external",
@@ -71,18 +74,27 @@ const cache = createCache({
   },
 });
 
+if (!cacheSetup.ok) {
+  throw new Error("Cache did not boot up.");
+}
+
+const appCache = cacheSetup.value;
+
 const server = Bun.serve({
   routes: {
     // e.g curl localhost:3000/product/1
     "/product/:id": {
       GET: async (req) => {
         const productId = req.params.id as unknown as string;
-        const isInHouse = isProductInHouse();
+        const isInHouse = isProductInHouse(productId);
         if (isInHouse) {
-          const res = await cache.inHouseProducts.getOrSet(productId);
+          const res = await appCache.inHouseProducts.getOrSet(productId);
+          if (res.ok) {
+            res.value;
+          }
           return Response.json(res);
         } else {
-          const res = await cache.externalProducts.getOrSet(productId);
+          const res = await appCache.externalProducts.getOrSet(productId);
           return Response.json(res);
         }
       },
@@ -93,7 +105,7 @@ const server = Bun.serve({
         const type = req.params.id as unknown as "in-house" | "external";
         const from = Number.parseInt(req.params.from);
         const to = Number.parseInt(req.params.to);
-        const res = await cache.salesReport.getOrSet(type, from, to);
+        const res = await appCache.salesReport.getOrSet(type, from, to);
         return Response.json(res);
       },
     },
