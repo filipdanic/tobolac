@@ -1,3 +1,5 @@
+![logo](/tobolac_logo_128.png)
+
 # tobolac
 
 Type-safe, Zod-compatible two-layer cache for TypeScript with a small API and fast defaults. Works with Bun and Node out of the box. Comes with:
@@ -21,12 +23,14 @@ But most importantly, `tobolac` is _really_ fast and can handle 2.5-5x more ops/
 
 The single-node part is important: `tobolac` is not better than Redis or anything else in essence, but simply optimized to work very well in single-node use-cases where we can avoid network overhead. Think of things like: data/etl pipelines, mobile/desktop apps trying to avoid heavy compute, local simulation software, ML inference caches, small-scale web servers, dev/pre-prod environments (dependency inject to avoid spinning up Redis), and parser/graph caching for build tools.
 
+You can read more about the motivation for this project here: [tobolac: Fast, Single-node Cache for Bun and Node.js](https://danicfilip.com/blog/tobolac-blazing-fast-single-node-cache/)
+
 ## Quick Start
 
 ```ts
-import { createCache, namespace } from "tobolac";
-import type { Product, DashboardStats } from "../yourapp/services/types";
-import { getProduct, getReport } from "../yourapp/services/getters";
+import { createCache, namespace } from 'tobolac';
+import type { Product, DashboardStats } from '../yourapp/services/types';
+import { getProduct, getReport } from '../yourapp/services/getters';
 
 const cacheSetup = createCache({
   namespaces: {
@@ -46,14 +50,14 @@ if (!cacheSetup.ok) {
 
 const appCache = cacheSetup.value;
 
-const productResult = await appCache.products.getOrSet("b651113bf96a5e3543d7");
+const productResult = await appCache.products.getOrSet('b651113bf96a5e3543d7');
 if (!productResult.ok) {
   // error handling
 } {
   // do something with productResult.value, already inferred as 'Product' type
 }
 
-const weeklyReport = await appCache.reports.getOrSet("sales-total", 1771545600000, 1772150400000);
+const weeklyReport = await appCache.reports.getOrSet('sales-total', 1771545600000, 1772150400000);
 if (!weeklyReport.ok) {
   // error handling
 } {
@@ -79,9 +83,9 @@ yarn install tobolac better-sqlite3
 ## Advanced Config
 
 ```ts
-import { createCache, namespace } from "tobolac";
-import type { Product, DashboardStats, User } from "../yourapp/services/types";
-import { getProduct, getReport } from "../yourapp/services/getters";
+import { createCache, namespace } from 'tobolac';
+import type { Product, DashboardStats, User } from '../yourapp/services/types';
+import { getProduct, getReport } from '../yourapp/services/getters';
 
 const cacheSetup = createCache({
   // these will be applied to every namespace, unless the namespace setup
@@ -124,14 +128,14 @@ Every public API returns a `CacheResult<T>` instead of throwing:
 
 For schema-enabled namespaces, validation failures return:
 
-- `error.kind = "validation"`
+- `error.kind = 'validation'`
 - `error.message` with the validator message (for example from zod)
 
 ## Zod Example
 
 ```ts
-import { z } from "zod";
-import { createCache, namespace } from "tobolac";
+import { z } from 'zod';
+import { createCache, namespace } from 'tobolac';
 
 const cache = createCache({
   namespaces: {
@@ -140,7 +144,7 @@ const cache = createCache({
 });
 
 if (cache.ok) {
-  const result = await cache.value.product.get("p1");
+  const result = await cache.value.product.get('p1');
   if (!result.ok) {
     console.error(result.error.kind, result.error.message);
   }
